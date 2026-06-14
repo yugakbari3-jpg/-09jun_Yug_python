@@ -1,0 +1,6 @@
+print("Whtasapp")
+print("Python can be used in backend for interpreting the commands line by line")
+print("Instagram")
+print("Python can be ussd for for viewing data like scrolling reels of our intrest")
+print("Calculator")
+print(" python can be used for calculations that is input by the user")
