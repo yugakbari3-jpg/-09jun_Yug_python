@@ -1,0 +1,6 @@
+message = input("Enter a message: ")
+reverse = ""
+for i in range(len(message) - 1, -1, -1):
+    reverse = reverse + message[i:i+1]
+
+print(reverse)
