@@ -1,4 +1,4 @@
-a=int(input("Enter a numbr"))
+a=int(input("Enter a number"))
 
 if a%2==0:
     print("The Number is Even")
