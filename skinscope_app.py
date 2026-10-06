@@ -2437,6 +2437,53 @@ canvas.chart{width:100%;height:240px;display:block;cursor:crosshair}
 .auth .art{background:linear-gradient(135deg,#2b1a74,#5a1a5a);border-radius:30px;padding:14px;box-shadow:0 20px 50px -20px rgba(124,77,255,.8)}
 .me .nm{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:600px){.me .nm{display:none}}
+.btn svg{width:16px;height:16px;flex:none}
+.slot-acts{margin-top:12px;justify-content:center}
+.slot .retake{position:absolute;top:10px;left:10px;background:rgba(10,8,24,.65);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:50%;width:30px;height:30px;cursor:pointer;z-index:2;display:grid;place-items:center;padding:0;transition:transform .2s}
+.slot .retake svg{width:16px;height:16px}.slot .retake:hover{transform:scale(1.1);background:var(--brand)}
+#cam{position:fixed;inset:0;z-index:70;display:none;place-items:center;background:rgba(5,4,14,.88);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);padding:16px;overflow:auto}
+#cam.on{display:grid;animation:fadein .25s both}
+.cam-in{width:min(100%,480px);display:flex;flex-direction:column;gap:12px;color:#fff}
+.cam-top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.cam-top b{font-size:18px;letter-spacing:-.02em}.cam-top .tiny{color:#c9c4e6}
+#cam .btn{color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.07)}
+#cam .opt{color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.07)}
+#cam .opt:has(input:checked){background:linear-gradient(120deg,#8b6cff,#ff5fa8);border-color:transparent;box-shadow:0 6px 18px -8px #8b6cff}
+#cam .opt:has(input:checked)::before{content:"\2713";font-weight:900}
+.cam-stage{position:relative;width:min(100%,calc(62vh*.8));aspect-ratio:4/5;margin:0 auto;border-radius:28px;overflow:hidden;background:#000;box-shadow:0 30px 80px -20px rgba(124,77,255,.6),0 0 0 1px rgba(255,255,255,.12)}
+.cam-stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cam-stage video.mirror{transform:scaleX(-1)}
+.cam-guide{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.cam-guide .oval{stroke:rgba(255,255,255,.75);transition:stroke .3s}
+.cam-guide .oval-dash{stroke:rgba(255,255,255,.35);transform-box:fill-box;transform-origin:center;animation:spin 20s linear infinite}
+.cam-guide .brk{stroke:url(#camG)}
+#cam.warn .cam-guide .oval{stroke:#fbbf24}
+#cam.ok .cam-guide .oval,#cam.ok .cam-guide .oval-dash{stroke:#34d399}
+.cam-scan{position:absolute;left:12%;right:12%;top:8%;height:3px;border-radius:3px;background:linear-gradient(90deg,transparent,#67e8f9,transparent);box-shadow:0 0 18px #67e8f9;animation:camscan 2.6s ease-in-out infinite alternate;pointer-events:none}
+#cam.ok .cam-scan{background:linear-gradient(90deg,transparent,#34d399,transparent);box-shadow:0 0 18px #34d399}
+@keyframes camscan{from{top:8%}to{top:90%}}
+.cam-msg{position:absolute;left:50%;top:14px;transform:translateX(-50%);max-width:88%;padding:8px 16px;border-radius:99px;background:rgba(10,8,24,.72);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.18);font-weight:650;font-size:13.5px;text-align:center;transition:background .3s}
+#cam.warn .cam-msg{background:rgba(180,120,10,.82)}
+#cam.ok .cam-msg{background:rgba(5,150,105,.88)}
+.cam-count{position:absolute;inset:0;display:none;place-items:center;pointer-events:none}
+.cam-count.on{display:grid}
+.cam-count span{font-size:130px;font-weight:900;color:#fff;text-shadow:0 0 50px #8b6cff,0 0 20px #ff5fa8;animation:countpop 1s ease-out both}
+@keyframes countpop{0%{transform:scale(1.8);opacity:0}25%{transform:scale(1);opacity:1}100%{transform:scale(.85);opacity:.15}}
+.cam-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.cam-flash.go{animation:camflash .55s ease-out}
+@keyframes camflash{0%{opacity:.95}100%{opacity:0}}
+.cam-err{position:absolute;inset:0;display:none;flex-direction:column;gap:14px;align-items:center;justify-content:center;text-align:center;padding:30px;background:rgba(10,8,24,.92);font-size:14px}
+.cam-err.on{display:flex}
+.cam-checks{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.cam-checks span{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:99px;font-size:12px;font-weight:700;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#c9c4e6;transition:all .3s}
+.cam-checks span::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.cam-checks span.y{color:#34d399;border-color:rgba(52,211,153,.45);background:rgba(52,211,153,.12)}
+.cam-checks span.n{color:#fbbf24;border-color:rgba(251,191,36,.45);background:rgba(251,191,36,.12)}
+.cam-ctl{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+.cam-ctl .opt{justify-self:start}.cam-ctl .btn{justify-self:end}
+.shutter{width:74px;height:74px;border-radius:50%;border:0;cursor:pointer;background:radial-gradient(circle,#fff 0 50%,transparent 53%),conic-gradient(#8b6cff,#ff5fa8,#22d3ee,#8b6cff);box-shadow:0 0 0 4px rgba(255,255,255,.14),0 10px 34px -6px rgba(139,108,255,.8);transition:transform .15s}
+.shutter:hover{transform:scale(1.06)}.shutter:active{transform:scale(.9)}
+.cam-foot{text-align:center;color:#a19dbf}
 </style></head>
 <body>
 <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -2450,6 +2497,30 @@ canvas.chart{width:100%;height:240px;display:block;cursor:crosshair}
 <input type="file" id="fileIn" accept="image/*" hidden>
 <div id="toast"></div>
 <div id="busy" role="status" aria-live="polite"><div class="in"><div id="busyArt"></div><b>Analysing your skin</b><div class="sub" id="busySub"></div><div class="prog"><i></i></div></div></div>
+<div id="cam" role="dialog" aria-modal="true" aria-label="Camera">
+ <div class="cam-in">
+  <div class="cam-top"><div><b id="camTitle">Front photo</b><div class="tiny" id="camSub"></div></div><button class="btn icon" data-act="camClose" title="Close camera">&times;</button></div>
+  <div class="cam-stage">
+   <video id="camVideo" playsinline muted autoplay></video>
+   <svg class="cam-guide" viewBox="0 0 400 500" preserveAspectRatio="none" aria-hidden="true">
+    <defs><mask id="camMask"><rect width="400" height="500" fill="#fff"/><ellipse cx="200" cy="245" rx="132" ry="178" fill="#000"/></mask>
+     <linearGradient id="camG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c4b5fd"/><stop offset=".5" stop-color="#ff8cc6"/><stop offset="1" stop-color="#67e8f9"/></linearGradient></defs>
+    <rect width="400" height="500" fill="rgba(5,4,14,.55)" mask="url(#camMask)"/>
+    <ellipse class="oval-dash" cx="200" cy="245" rx="146" ry="192" fill="none" stroke-width="1.5" stroke-dasharray="3 10"/>
+    <ellipse class="oval" cx="200" cy="245" rx="132" ry="178" fill="none" stroke-width="3.5"/>
+    <g class="brk" fill="none" stroke-width="4" stroke-linecap="round"><path d="M24 70V24h46M376 70V24h-46M24 430v46h46M376 430v46h-46"/></g>
+   </svg>
+   <div class="cam-scan"></div>
+   <div class="cam-msg" id="camMsg">Starting camera...</div>
+   <div class="cam-count" id="camCount"></div>
+   <div class="cam-flash" id="camFlash"></div>
+   <div class="cam-err" id="camErr"><div id="camErrMsg"></div><button class="btn p" data-act="camUpload">Upload a photo instead</button></div>
+  </div>
+  <div class="cam-checks" id="camChecks"></div>
+  <div class="cam-ctl"><label class="opt"><input type="checkbox" id="camAuto" checked> Auto-capture</label><button class="shutter" data-act="camShoot" title="Take photo now" aria-label="Take photo now"></button><button class="btn sm" data-act="camFlip">Switch camera</button></div>
+  <div class="tiny cam-foot">Live checks run on this computer. Nothing is saved until you press Analyse.</div>
+ </div>
+</div>
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -2708,13 +2779,13 @@ function tplQuestions(){
 }
 function slotHtml(v){
   const info=VIEW_INFO[v], p=sc.photos[v], ck=sc.checks[v];
-  if(p) return `<div class="slot has${ck?'':' checking'}" data-act="pickPhoto" data-v="${v}"><img src="${p}" alt=""><button class="x" data-act="removePhoto" data-v="${v}" title="Remove">&times;</button><div class="cap">${esc(info.name)} &middot; ${ck?(ck.found?(ck.notes.length?'<span style="color:#fcd34d">'+esc(ck.notes[0])+'</span>':'&#10003; good photo'):'<span style="color:#fca5a5">no face found</span>'):'checking...'}</div></div>`;
-  return `<div class="slot" data-act="pickPhoto" data-v="${v}"><div class="cam">${ic('camera')}</div><b>${esc(info.name)}</b><div class="small muted">${esc(info.sub)}</div><div class="tiny muted" style="margin-top:6px">${info.required?'Required':'Optional'} &middot; click to upload</div></div>`;
+  if(p) return `<div class="slot has${ck?'':' checking'}" data-act="pickPhoto" data-v="${v}"><img src="${p}" alt="">${HAS_CAM?`<button class="retake" data-act="openCam" data-v="${v}" title="Retake with camera">${ic('camera')}</button>`:''}<button class="x" data-act="removePhoto" data-v="${v}" title="Remove">&times;</button><div class="cap">${esc(info.name)} &middot; ${ck?(ck.found?(ck.notes.length?'<span style="color:#fcd34d">'+esc(ck.notes[0])+'</span>':'&#10003; good photo'):'<span style="color:#fca5a5">no face found</span>'):'checking...'}</div></div>`;
+  return `<div class="slot" data-act="pickPhoto" data-v="${v}"><div class="cam">${ic('camera')}</div><b>${esc(info.name)}</b><div class="small muted">${esc(info.sub)}</div><div class="tiny muted" style="margin-top:6px">${info.required?'Required':'Optional'} &middot; ${HAS_CAM?'take or upload a photo':'click to upload'}</div>${HAS_CAM?`<div class="row slot-acts"><button class="btn sm p" data-act="openCam" data-v="${v}">${ic('scan')} Use camera</button><button class="btn sm" data-act="pickPhoto" data-v="${v}">Upload</button></div>`:''}</div>`;
 }
 function tplScan(){
   const ready=!!sc.photos.front&&sc.checks.front&&sc.checks.front.found;
   return `<h2>Skin scan</h2><p class="muted">Step 1: add your photos. Step 2: answer a few quick questions. Step 3: analyse.</p>
-  <div class="card"><h3>1. Upload your photos</h3><div class="slots" id="slots">${VIEWS_ORDER.map(slotHtml).join('')}</div>
+  <div class="card"><h3>1. Add your photos</h3><div class="slots" id="slots">${VIEWS_ORDER.map(slotHtml).join('')}</div>
     <p class="small muted" style="margin-top:10px">The front photo is required. The side photos are optional and help count spots on each cheek. Photos are analysed on this computer and never saved.</p></div>
   <div class="card"><h3>2. Quick questions <span class="chip grey">recommended</span></h3><p class="small muted">These power your breakout outlook and nutrition watch-list. Without the food answers, the nutrition section stays locked.</p><div id="qform">${tplQuestions()}</div></div>
   <div class="card"><div class="row"><button class="btn p big" id="analyzeBtn" data-act="analyze" ${ready?'':'disabled'}>3. Analyse my skin</button><span class="small muted" id="analyzeHint">${ready?'':'Add a clear front photo to continue.'}</span></div></div>
@@ -2773,6 +2844,68 @@ async function doAnalyze(){
     location.hash='#/results/'+out.id;
   }catch(e){busy(false);toast(e.message);b.disabled=false;b.textContent='3. Analyse my skin';}
 }
+
+/* ---------- live camera capture with real-time photo checks ---------- */
+const HAS_CAM=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);
+const CAM_CHECKS=[['face','Face found'],['light','Brightness'],['even','Even light'],['sharp','Sharp'],['dist','Close enough']];
+let cam=null;
+function camSet(state,msg){const el=$('#cam');el.classList.toggle('ok',state==='ok');el.classList.toggle('warn',state==='warn');if(msg!=null)$('#camMsg').textContent=msg;}
+function camChips(st){$('#camChecks').innerHTML=CAM_CHECKS.map(([k,l])=>{const v=st?st[k]:null;return `<span class="${v===true?'y':v===false?'n':''}">${l}</span>`;}).join('');}
+async function openCam(view){
+  closeCam();
+  cam={view,facing:'user',good:0,alive:true,stream:null,timer:null,cd:null};
+  const info=VIEW_INFO[view];$('#camTitle').textContent=info.name;$('#camSub').textContent=info.sub+'. Fit your face inside the oval.';
+  $('#camErr').classList.remove('on');$('#camCount').classList.remove('on');camChips(null);camSet('','Starting camera...');
+  $('#cam').classList.add('on');await camStart();
+}
+async function camStart(){
+  camStop();
+  try{
+    const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:cam.facing,width:{ideal:1280},height:{ideal:960}},audio:false});
+    if(!cam||!cam.alive){s.getTracks().forEach(t=>t.stop());return;}
+    cam.stream=s;const v=$('#camVideo');v.srcObject=s;v.classList.toggle('mirror',cam.facing==='user');
+    try{await v.play();}catch(e){}
+    camSet('','Looking for your face...');clearTimeout(cam.timer);cam.timer=setTimeout(camLoop,400);
+  }catch(e){
+    if(!cam)return;
+    $('#camErrMsg').textContent=e&&e.name==='NotAllowedError'?'Camera access was blocked. Allow the camera for this page in your browser settings, or upload a photo instead.':'No camera could be opened on this device. You can upload a photo instead.';
+    $('#camErr').classList.add('on');
+  }
+}
+function camStop(){if(cam&&cam.stream){cam.stream.getTracks().forEach(t=>t.stop());cam.stream=null;}}
+function closeCam(){if(!cam)return;cam.alive=false;clearTimeout(cam.timer);clearInterval(cam.cd);camStop();const v=$('#camVideo');if(v)v.srcObject=null;cam=null;$('#cam').classList.remove('on');}
+function camFrame(maxW){const v=$('#camVideo');let w=v.videoWidth,h=v.videoHeight;if(!w||!h)return null;if(w>maxW){h=Math.round(h*maxW/w);w=maxW;}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(v,0,0,w,h);return c;}
+async function camLoop(){
+  if(!cam||!cam.alive)return;
+  const c=cam.cd?null:camFrame(640);
+  if(c){
+    try{const r=await api('/api/check',{image:c.toDataURL('image/jpeg',0.8)});if(cam&&cam.alive&&!cam.cd)camJudge(r);}
+    catch(e){if(e.status===401){closeCam();me=null;route();return;}}
+  }
+  if(cam&&cam.alive)cam.timer=setTimeout(camLoop,600);
+}
+function camJudge(r){
+  const notes=r.notes||[],n=notes.join(' ').toLowerCase(),f=!!r.found;
+  const st=f?{face:true,light:!/too dark|too bright/.test(n),even:!/uneven/.test(n),sharp:!/blurry/.test(n),dist:!/too small/.test(n)}:{face:false};
+  camChips(st);
+  const ok=f&&!notes.length;cam.good=ok?cam.good+1:0;
+  if(!f)camSet('warn','Looking for your face... centre it in the oval');
+  else if(!ok)camSet('warn',notes[0]);
+  else camSet('ok',cam.good>=2?'Perfect, hold still':'Looks good, hold still');
+  if(ok&&cam.good>=2&&$('#camAuto').checked)camCountdown();
+}
+function camCountdown(){
+  if(!cam||cam.cd)return;let k=3;const el=$('#camCount');el.innerHTML=`<span>${k}</span>`;el.classList.add('on');
+  cam.cd=setInterval(()=>{k--;if(!cam)return;if(k<=0){clearInterval(cam.cd);cam.cd=null;el.classList.remove('on');camShoot();}else el.innerHTML=`<span>${k}</span>`;},1000);
+}
+async function camShoot(){
+  if(!cam)return;clearInterval(cam.cd);cam.cd=null;$('#camCount').classList.remove('on');
+  const c=camFrame(1280);if(!c){toast('The camera is not ready yet');return;}
+  const fl=$('#camFlash');fl.classList.remove('go');void fl.offsetWidth;fl.classList.add('go');
+  const view=cam.view,blob=await new Promise(res=>c.toBlob(res,'image/jpeg',0.92));
+  setTimeout(()=>{closeCam();if(blob){loadPhotoFile(view,blob);toast('Photo captured. Checking it now.');}},350);
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&cam)closeCam();});
 
 /* ---------- results ---------- */
 function likeChip(l){return {likely_low:'<span class="chip bad">Likely low</span>',possibly_low:'<span class="chip warn">Possibly low</span>',likely_fine:'<span class="chip good">Likely fine</span>',unknown:'<span class="chip grey">Answer food questions</span>'}[l];}
@@ -3031,7 +3164,7 @@ async function route(){
   const parts=(location.hash.replace(/^#\/?/,'')||'home').split('/'),name=parts[0],arg=parts[1];
   if(!me){mount(tplAuth());return;}
   const fn=VIEWS[name]||VIEWS.home,key=VIEWS[name]?name:'home';
-  busy(false);window._key=key;
+  busy(false);closeCam();window._key=key;
   mount(shell(key,'<div class="card loading"><span class="spinner"></span><span class="muted">Loading...</span></div>'));
   try{const html=await fn(arg);$('#view').innerHTML=html;window.scrollTo(0,0);fx($('#view'));if(AFTER[key])AFTER[key]();}
   catch(e){if(e.status===401){me=null;route();return;}$('#view').innerHTML=`<div class="card"><h3>Something went wrong</h3><p class="muted">${esc(e.message)}</p></div>`;}
@@ -3042,6 +3175,11 @@ window.addEventListener('resize',()=>{if(location.hash.startsWith('#/history'))a
 /* ---------- actions ---------- */
 async function reloadMe(){const j=await api('/api/me');me=j.user;if(j.questions){cfg={questions:j.questions,freq:j.freq,labels:j.labels,zones:j.zones,detector:j.detector};}}
 const ACT={
+  openCam:(a,e)=>{e.stopPropagation();openCam(a.dataset.v);},
+  camClose:()=>closeCam(),
+  camShoot:()=>camShoot(),
+  camFlip:async()=>{if(!cam)return;cam.facing=cam.facing==='user'?'environment':'user';cam.good=0;await camStart();},
+  camUpload:()=>{const v=cam?cam.view:'front';closeCam();pendingView=v;$('#fileIn').click();},
   theme:()=>{THEME=THEME==='dark'?'light':'dark';applyTheme();$$('[data-act=theme]').forEach(b=>b.innerHTML=ic(THEME==='dark'?'sun':'moon'));const k=window._key;if(me&&AFTER[k])AFTER[k]();},
   authMode:a=>{authMode=a.dataset.m;authErr='';mount(tplAuth());},
   authGo:async()=>{
