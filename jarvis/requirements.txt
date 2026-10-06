@@ -1,0 +1,19 @@
+# Core
+python-dotenv
+requests
+numpy
+sounddevice
+faster-whisper
+webrtcvad-wheels
+rapidfuzz
+beautifulsoup4
+pynput
+mcp
+
+# Optional features
+piper-tts         # text-to-speech voice
+pygame            # tune playback
+faiss-cpu         # fast vector memory
+geoip2            # location detection
+Pillow            # screenshots
+pytesseract       # screenshot OCR
