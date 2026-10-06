@@ -2,45 +2,35 @@
 
 Last reviewed: 2026-10-06
 
-This file backs up the `evidence` labels and the `skin` text in the
-`NUTRIENTS` table, the `LIFESTYLE` / `FACTORS` content and the `routine_plan()`
-wording in `skinscope_app.py`.
-
-> **Status:** `skinscope_app.py` is not in this repository yet, so the current
-> labels could not be compared or edited. The "Recommended label" and
-> "Suggested `skin` text" columns below are ready to paste in once the file is
-> added. Anything currently labelled differently should be changed to match.
+This file backs up the `evidence` labels and `skin` text in the `NUTRIENTS`
+table of `skinscope_app.py`. It also checks the diet factors (dairy, sugar /
+glycemic index) used by `FACTORS`, `EXPERIMENTS`, `lifestyle_plan()` and
+`routine_plan()`.
 
 ## Label scale
 
 | Label | Meaning |
 |---|---|
-| **Moderate** | Supported by meta-analysis of RCTs or consistent meta-analyses of observational data, with at least some trial evidence |
-| **Limited to moderate** | Consistent observational associations in meta-analyses, little or no RCT confirmation |
-| **Limited** | A few small or poor-quality RCTs, or associations only |
+| **Moderate** | Supported by a meta-analysis of RCTs, or consistent meta-analyses with some trial support |
+| **Limited to moderate** | Consistent associations in meta-analyses, with only small or low-quality trials |
+| **Limited** | A few small RCTs, or consistent associations only |
 | **Weak** | Isolated studies, conflicting results or mechanism only |
 
-## Summary table
+## What was checked and changed
 
-| Factor | Recommended label | Suggested `skin` text | Change vs. common claims |
-|---|---|---|---|
-| Glycemic index / sugar | **Moderate** | Lower-glycemic eating (fewer sugary drinks, refined carbs) has small RCTs showing fewer acne lesions. | Holds. Evidence is mostly small trials; a 2025 meta-analysis of observational data found no pooled link. |
-| Dairy (esp. skim milk) | **Limited to moderate** | Milk, especially skim/low-fat, is linked with more acne in observational studies; yogurt and cheese are less clear. No RCTs. | Holds. Should be phrased as an association, not a cause. |
-| Zinc | **Moderate** | People with acne tend to have lower serum zinc; oral zinc reduces inflammatory papules (weaker than antibiotics). | Upgrade if labelled "Limited". |
-| Omega-3 | **Limited** | Small RCTs suggest omega-3 (fish oil) may reduce inflammatory lesions; most trials are small. | Downgrade if labelled "Moderate". |
-| Vitamin D | **Limited** | Low vitamin D is consistently found in people with acne and tracks severity; supplementing helps mainly if you're deficient. | Holds or upgrade from "Weak". Association is strong; trials are few. |
-| Vitamin A | **Weak** (diet) | Lower vitamin A levels are seen in acne, but food intake isn't proven to help. High-dose supplements are toxic and must not be used in pregnancy; prescription retinoids are the proven route. | Add the safety warning. |
-| Vitamin C | **Weak** (oral) | No good evidence that oral vitamin C helps acne. Topical sodium ascorbyl phosphate (5%) has small trials showing benefit. | Downgrade if any oral benefit is implied. |
-| Vitamin B12 | **Weak**, and the evidence points the other way | Extra B12 isn't shown to help acne. High-dose B12 supplements/injections can *trigger* acne-like breakouts in some people. | Rewrite any "B12 helps skin" claim. |
-| Iron | **Weak** | Studies of iron/ferritin in acne conflict; no evidence iron intake affects acne. Only correct a diagnosed deficiency. | Downgrade if labelled above "Weak". |
-
-### Suggested `routine_plan()` wording
-
-> Diet changes are a supporting step, not a treatment. The best-supported
-> change is cutting high-glycemic foods and sugary drinks; reducing milk
-> (especially skim) may help some people. Don't start high-dose vitamin A or
-> B12 supplements for acne; get vitamin D, zinc or iron checked before you
-> supplement them. See a dermatologist for moderate or severe acne.
+| Factor | Where | Old label | New label | `skin` text |
+|---|---|---|---|---|
+| Glycemic index / sugar | `EXPERIMENTS`, `lifestyle_plan()`, "Go easier on" list | Moderate | Moderate (no change) | No change. Small RCTs support low-GL diets; a small 2025 observational meta-analysis was null. |
+| Dairy | `EXPERIMENTS`, `lifestyle_plan()`, "Go easier on" list | Limited to moderate | Limited to moderate (no change) | No change. Observational only, strongest for skim milk; existing "test it yourself" wording fits. |
+| Zinc | `NUTRIENTS` | Limited to moderate | Limited to moderate (no change) | **Updated.** The 2020 meta-analysis shows lower serum zinc and fewer inflamed papules with zinc, so "results are mixed" undersold it. Trials are small and zinc is weaker than standard treatment, so the label stays. |
+| Omega-3 | `NUTRIENTS` | Limited | Limited (no change) | No change. Matches JAMA Dermatology 2023. |
+| Vitamin D | `NUTRIENTS` | Limited and mixed | **Limited** | **Updated.** The association is consistent across meta-analyses, not mixed. Supplement trials are still few. |
+| Vitamin A | `NUTRIENTS` | Weak for food; strong for prescription retinoids | No change | No change. The safety warning was already present. |
+| Vitamin C | `NUTRIENTS` | Limited | **Weak** | **Updated.** No evidence that oral or dietary vitamin C affects acne; only topical forms have small trials. |
+| Vitamin B12 | `NUTRIENTS` | Not an acne factor | No change | No change. Already says high doses can trigger breakouts (Kang 2015, Veraldi 2018). |
+| Iron | `NUTRIENTS` | Not an acne factor | No change | **Updated.** "Iron is not linked to acne" was stronger than the evidence, which is a few small, conflicting case-control studies. |
+| `FACTORS` | diary correlation | (no evidence labels) | — | Detection logic only. Nothing to change. |
+| `routine_plan()` | skincare steps | — | — | No change. It holds no diet claims; "Vitamin C serum: may help dark marks fade" matches the topical evidence. |
 
 ---
 
@@ -135,3 +125,4 @@ wording in `skinscope_app.py`.
 ## Caveats
 - Almost all diet–acne data are observational (case-control or cross-sectional) and rely on self-reported intake. Low nutrient levels in acne patients may be a *result* of inflammation rather than a cause.
 - Penso 2020 and the Reynolds 2024 guideline are cited from memory and from summaries. Before shipping, check their links and exact wording against the full text.
+- B12 and iron have no 2020+ systematic review; their entries rest on older or smaller studies.

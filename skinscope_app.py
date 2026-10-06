@@ -1277,8 +1277,8 @@ NUTRIENTS = [
     {"key": "zinc", "name": "Zinc", "w": {"meat": 1.0, "nuts_seeds": 0.9, "legumes_grains": 0.7, "fish": 0.6,
                                           "eggs": 0.5, "dairy": 0.4}, "target": 5.0, "supp": ("zinc",),
      "multi": 0.8, "plant": {"veg": 0.9, "vegan": 0.8}, "rank": 1, "evidence": "Limited to moderate",
-     "skin": "Some studies find lower zinc in people with acne, and zinc by mouth has helped some people in trials, "
-             "but results are mixed and it does not replace standard acne treatment.",
+     "skin": "A 2020 review found people with acne tend to have lower zinc, and zinc by mouth reduced inflamed "
+             "spots in trials. Most trials are small, it works less well than standard treatment and does not replace it.",
      "foods": [("Pumpkin seeds", ()), ("Chickpeas or lentils", ()), ("Cashews or almonds", ()),
                ("Tofu", ()), ("Beef or chicken", ("meat",)), ("Oysters or crab", ("fish",)),
                ("Eggs", ("egg",)), ("Yoghurt", ("dairy",))],
@@ -1294,8 +1294,9 @@ NUTRIENTS = [
      "amount": "Health bodies commonly suggest 2 portions of fish a week, one of them oily.",
      "caution": "Fish oil can interact with blood thinners. Ask a doctor first if you take any."},
     {"key": "vitamin_d", "name": "Vitamin D", "w": {"fish": 0.6, "eggs": 0.3, "dairy": 0.3}, "target": 3.0,
-     "supp": ("vitd",), "multi": 0.7, "plant": {}, "rank": 3, "evidence": "Limited and mixed",
-     "skin": "Some studies link low vitamin D with acne, but results are mixed.",
+     "supp": ("vitd",), "multi": 0.7, "plant": {}, "rank": 3, "evidence": "Limited",
+     "skin": "Reviews consistently find lower vitamin D in people with acne, more so in severe acne. A few small "
+             "trials suggest supplements help people who are low, but it is not proven to treat acne on its own.",
      "foods": [("Safe daylight on face and arms most days", ()), ("Oily fish", ("fish",)), ("Egg yolks", ("egg",)),
                ("Fortified milk or plant milk", ()), ("UV-exposed mushrooms", ())],
      "amount": "Adults need roughly 10 to 15 micrograms (400 to 600 IU) a day. The upper limit is 100 micrograms.",
@@ -1310,8 +1311,9 @@ NUTRIENTS = [
      "amount": "Adults need roughly 700 to 900 micrograms RAE a day.",
      "caution": "Do not take high-dose vitamin A supplements. Too much is harmful, especially in pregnancy."},
     {"key": "vitamin_c", "name": "Vitamin C", "w": {"fruit": 1.2, "greens": 0.8}, "target": 3.0,
-     "supp": ("vitc",), "multi": 0.7, "plant": {}, "rank": 5, "evidence": "Limited",
-     "skin": "Vitamin C helps skin repair and may help marks fade. It is not an acne treatment.",
+     "supp": ("vitc",), "multi": 0.7, "plant": {}, "rank": 5, "evidence": "Weak",
+     "skin": "Vitamin C helps skin repair and may help marks fade. Eating more of it has not been shown to "
+             "affect acne, so it is not an acne treatment.",
      "foods": [("Oranges, kiwi or guava", ()), ("Strawberries", ()), ("Bell peppers", ()),
                ("Amla (Indian gooseberry)", ()), ("Broccoli", ())],
      "amount": "Adults need roughly 75 to 90 mg a day. The upper limit is 2,000 mg.",
@@ -1327,8 +1329,8 @@ NUTRIENTS = [
     {"key": "iron", "name": "Iron", "w": {"meat": 1.0, "legumes_grains": 0.7, "greens": 0.6, "eggs": 0.3,
                                           "fish": 0.3}, "target": 4.0, "supp": ("iron",), "multi": 0.6,
      "plant": {"veg": 0.85, "vegan": 0.75}, "rank": 7, "evidence": "Not an acne factor",
-     "skin": "Iron is not linked to acne. It is included because low iron is common and causes tiredness, "
-             "paleness and hair shedding.",
+     "skin": "Small studies on iron and acne disagree, and none show a clear link. It is included because low "
+             "iron is common and causes tiredness, paleness and hair shedding.",
      "foods": [("Lentils or chickpeas", ()), ("Spinach with a squeeze of lemon", ()), ("Tofu", ()),
                ("Beef or chicken", ("meat",)), ("Iron-fortified cereal", ())],
      "amount": "Adults need roughly 8 to 18 mg a day depending on age and sex.",
