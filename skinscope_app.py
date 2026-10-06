@@ -2484,8 +2484,78 @@ canvas.chart{width:100%;height:240px;display:block;cursor:crosshair}
 .shutter{width:74px;height:74px;border-radius:50%;border:0;cursor:pointer;background:radial-gradient(circle,#fff 0 50%,transparent 53%),conic-gradient(#8b6cff,#ff5fa8,#22d3ee,#8b6cff);box-shadow:0 0 0 4px rgba(255,255,255,.14),0 10px 34px -6px rgba(139,108,255,.8);transition:transform .15s}
 .shutter:hover{transform:scale(1.06)}.shutter:active{transform:scale(.9)}
 .cam-foot{text-align:center;color:#a19dbf}
+/* ---------- intro (app open) and welcome portal (after sign-in) ---------- */
+#intro{position:fixed;inset:0;z-index:100;display:grid;place-items:center;overflow:hidden;background:#07060f;color:#fff;cursor:pointer;animation:introFailsafe .3s 9s forwards}
+@keyframes introFailsafe{to{opacity:0;visibility:hidden}}
+#intro.gone{display:none}
+#intro.quick *,#intro.quick *::after,#intro.quick .ib::after{animation-duration:.01s!important;animation-delay:0s!important}
+#intro .ib{position:absolute;inset:0;pointer-events:none}
+#intro .ib i{position:absolute;border-radius:50%;filter:blur(80px);opacity:0;animation:ibIn 1.6s ease-out forwards,drift 14s ease-in-out infinite alternate}
+#intro .ib i:nth-child(1){width:55vmax;height:55vmax;left:-15vmax;top:-20vmax;background:rgba(124,77,255,.55)}
+#intro .ib i:nth-child(2){width:45vmax;height:45vmax;right:-14vmax;bottom:-18vmax;background:rgba(255,79,163,.42);animation-delay:.2s,0s}
+#intro .ib i:nth-child(3){width:35vmax;height:35vmax;left:35%;top:30%;background:rgba(34,211,238,.25);animation-delay:.4s,0s}
+@keyframes ibIn{to{opacity:1}}
+#intro .ib::after{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.14) 1px,transparent 1px);background-size:26px 26px;-webkit-mask-image:radial-gradient(circle at 50% 45%,#000,transparent 65%);mask-image:radial-gradient(circle at 50% 45%,#000,transparent 65%);opacity:0;animation:ibIn 1.2s .3s forwards}
+.ic-wrap{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;padding:20px}
+.i-face{width:min(46vw,210px);overflow:visible;filter:drop-shadow(0 0 28px rgba(139,108,255,.55))}
+.i-face .draw{stroke-dasharray:1;stroke-dashoffset:1;animation:idraw 1.1s cubic-bezier(.65,0,.35,1) forwards}
+.i-face .d1{animation-delay:.15s}.i-face .d2{animation-delay:.45s}.i-face .d3{animation-delay:.8s;animation-duration:.9s}
+@keyframes idraw{to{stroke-dashoffset:0}}
+.i-face .dot{opacity:0;transform-box:fill-box;transform-origin:center;animation:idot .45s cubic-bezier(.2,.9,.3,1.6) forwards;animation-delay:calc(1s + var(--i)*70ms)}
+@keyframes idot{from{opacity:0;transform:scale(0)}to{opacity:1;transform:scale(1)}}
+.i-face .spot{opacity:0;transform-box:fill-box;transform-origin:center;animation:idot .4s cubic-bezier(.2,.9,.3,1.6) forwards;animation-delay:calc(1.7s + var(--i)*160ms);filter:drop-shadow(0 0 6px currentColor)}
+.i-face .sweep{opacity:0;animation:isweep 1.5s 1.1s cubic-bezier(.45,0,.55,1) forwards}
+@keyframes isweep{0%{opacity:0;transform:translateY(0)}15%{opacity:1}85%{opacity:1}100%{opacity:0;transform:translateY(176px)}}
+.i-word{display:flex;align-items:center;gap:12px;margin-top:26px;font-size:clamp(34px,7vw,56px);font-weight:880;letter-spacing:-.04em}
+.i-word svg{width:.95em;height:.95em;opacity:0;animation:ilogo .7s 1.15s cubic-bezier(.2,.9,.3,1.4) forwards}
+@keyframes ilogo{from{opacity:0;transform:rotate(-120deg) scale(.3)}to{opacity:1;transform:none}}
+.i-word .lt{display:inline-flex;overflow:hidden;padding-bottom:.08em}
+.i-word .lt span{display:inline-block;transform:translateY(110%);background:linear-gradient(100deg,#fff 0%,#c7b8ff 50%,#ff8cc6 100%);background-size:900% 100%;background-position:calc(var(--i)*12.5%) 0;-webkit-background-clip:text;background-clip:text;color:transparent;animation:iletter .6s cubic-bezier(.2,.8,.2,1) forwards;animation-delay:calc(1.3s + var(--i)*45ms)}
+@keyframes iletter{to{transform:none}}
+.i-tag{margin-top:10px;font-size:clamp(14px,2.2vw,17px);color:#cfc9ee;opacity:0;animation:ifade .7s 1.9s forwards}
+.i-tag span{display:inline-block;transition:opacity .3s}
+@keyframes ifade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.i-bar{width:180px;height:4px;border-radius:4px;background:rgba(255,255,255,.12);margin-top:26px;overflow:hidden;opacity:0;animation:ifade .5s .5s forwards}
+.i-bar i{display:block;height:100%;width:0;border-radius:4px;background:linear-gradient(90deg,#8b6cff,#ff5fa8,#22d3ee);box-shadow:0 0 12px #ff5fa8;animation:ibar 2.4s .5s cubic-bezier(.4,0,.2,1) forwards}
+@keyframes ibar{to{width:100%}}
+.i-skip{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:12px;color:rgba(255,255,255,.45);opacity:0;animation:ifade .6s 1.5s forwards}
+#intro.out{animation:introOut .85s cubic-bezier(.7,0,.3,1) forwards;pointer-events:none}
+#intro.out .ic-wrap{animation:introZoom .85s cubic-bezier(.7,0,.3,1) forwards}
+@keyframes introOut{0%{opacity:1}60%{opacity:1}100%{opacity:0;visibility:hidden}}
+@keyframes introZoom{to{transform:scale(2.6);opacity:0;filter:blur(10px)}}
+body.entering #app{animation:appIn 1s .25s cubic-bezier(.2,.8,.2,1) both}
+@keyframes appIn{from{opacity:0;transform:scale(.94);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
+#portal{position:fixed;inset:0;z-index:95;display:none;place-items:center;color:#fff;text-align:center;background:radial-gradient(120% 140% at 0% 0%,#7c4dff 0%,transparent 55%),radial-gradient(90% 120% at 100% 100%,#ff4fa3 0%,transparent 55%),radial-gradient(70% 90% at 80% 0%,#22d3ee 0%,transparent 55%),linear-gradient(135deg,#2b1a74,#5a1a5a);clip-path:circle(0px at var(--x,50%) var(--y,50%))}
+#portal.on{display:grid;animation:portalIn .75s cubic-bezier(.7,0,.3,1) forwards}
+@keyframes portalIn{to{clip-path:circle(150vmax at var(--x,50%) var(--y,50%))}}
+#portal.on.out{clip-path:circle(150vmax at var(--x,50%) var(--y,50%));animation:portalOut .6s cubic-bezier(.7,0,.3,1) forwards}
+@keyframes portalOut{to{opacity:0;visibility:hidden}}
+#portal .pw{opacity:0;animation:ifade .6s .35s forwards}
+#portal .pw svg{width:64px;height:64px;filter:drop-shadow(0 10px 30px rgba(0,0,0,.4));animation:ilogo .7s .3s cubic-bezier(.2,.9,.3,1.4) both}
+#portal .pw small{display:block;margin-top:16px;font-size:16px;opacity:.85}
+#portal .pw b{display:block;font-size:clamp(34px,6vw,54px);font-weight:880;letter-spacing:-.04em;line-height:1.1}
+#portal.out .pw{animation:introZoom .6s cubic-bezier(.7,0,.3,1) forwards}
+@media (prefers-reduced-motion:reduce){#intro,#portal{display:none!important}}
 </style></head>
 <body>
+<div id="intro" aria-hidden="true" data-act="introSkip">
+ <div class="ib"><i></i><i></i><i></i></div>
+ <div class="ic-wrap">
+  <svg class="i-face" viewBox="0 0 200 240"><defs><linearGradient id="iG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c4b5fd"/><stop offset=".5" stop-color="#ff8cc6"/><stop offset="1" stop-color="#67e8f9"/></linearGradient><linearGradient id="iL" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#67e8f9" stop-opacity="0"/><stop offset="1" stop-color="#67e8f9" stop-opacity=".6"/></linearGradient><clipPath id="iC"><ellipse cx="100" cy="122" rx="62" ry="86"/></clipPath><linearGradient id="iLg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b6cff"/><stop offset=".6" stop-color="#ff5fa8"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+   <g fill="none" stroke="url(#iG)" stroke-width="3" stroke-linecap="round"><path class="draw d1" pathLength="1" d="M18 46V22h24"/><path class="draw d1" pathLength="1" d="M182 46V22h-24"/><path class="draw d1" pathLength="1" d="M18 194v24h24"/><path class="draw d1" pathLength="1" d="M182 194v24h-24"/></g>
+   <ellipse class="draw d2" pathLength="1" cx="100" cy="122" rx="62" ry="86" fill="none" stroke="url(#iG)" stroke-width="2.6"/>
+   <g fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1"><path class="draw d3" pathLength="1" d="M100 36v172"/><path class="draw d3" pathLength="1" d="M38 122h124"/><path class="draw d3" pathLength="1" d="M50 82q50 18 100 0"/><path class="draw d3" pathLength="1" d="M50 164q50-18 100 0"/><path class="draw d3" pathLength="1" d="M72 46q-12 76 0 152"/><path class="draw d3" pathLength="1" d="M128 46q12 76 0 152"/></g>
+   <circle class="dot" style="--i:0" cx="78" cy="104" r="2.6" fill="#fff"/><circle class="dot" style="--i:1" cx="122" cy="104" r="2.6" fill="#fff"/><circle class="dot" style="--i:2" cx="100" cy="128" r="2.6" fill="#fff"/><circle class="dot" style="--i:3" cx="86" cy="160" r="2.6" fill="#fff"/><circle class="dot" style="--i:4" cx="114" cy="160" r="2.6" fill="#fff"/><circle class="dot" style="--i:5" cx="100" cy="168" r="2.6" fill="#fff"/><circle class="dot" style="--i:6" cx="64" cy="90" r="2.6" fill="#fff"/><circle class="dot" style="--i:7" cx="136" cy="90" r="2.6" fill="#fff"/><circle class="dot" style="--i:8" cx="100" cy="58" r="2.6" fill="#fff"/><circle class="dot" style="--i:9" cx="70" cy="138" r="2.6" fill="#fff"/><circle class="dot" style="--i:10" cx="130" cy="138" r="2.6" fill="#fff"/><circle class="dot" style="--i:11" cx="100" cy="196" r="2.6" fill="#fff"/>
+   <circle class="spot" style="--i:0" cx="76" cy="148" r="4" fill="#ff8cc6"/><circle class="spot" style="--i:1" cx="130" cy="80" r="4" fill="#fbbf24"/><circle class="spot" style="--i:2" cx="118" cy="178" r="4" fill="#ff8cc6"/>
+   <g clip-path="url(#iC)"><g class="sweep"><rect x="30" y="10" width="140" height="26" fill="url(#iL)"/><rect x="30" y="35" width="140" height="2" fill="#67e8f9"/></g></g>
+  </svg>
+  <div class="i-word"><svg viewBox="0 0 32 32"><rect x="1" y="1" width="30" height="30" rx="10" fill="url(#iLg)"/><circle cx="14" cy="14" r="6.5" fill="none" stroke="#fff" stroke-width="2.4"/><path d="M19 19l5.5 5.5" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><circle cx="12" cy="12" r="1.6" fill="#fff"/></svg><span class="lt"><span style="--i:0">S</span><span style="--i:1">k</span><span style="--i:2">i</span><span style="--i:3">n</span><span style="--i:4">S</span><span style="--i:5">c</span><span style="--i:6">o</span><span style="--i:7">p</span><span style="--i:8">e</span></span></div>
+  <div class="i-tag"><span id="introTag">Know your skin. Get ahead of breakouts.</span></div>
+  <div class="i-bar"><i></i></div>
+ </div>
+ <div class="i-skip">Click anywhere to skip</div>
+</div>
+<div id="portal" aria-hidden="true"><div class="pw"><div id="portalLogo"></div><small id="portalSmall">Welcome back,</small><b id="portalName"></b></div></div>
 <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
 <div id="app"></div>
 <div id="rvmodal"><div id="rvbox">
@@ -2703,6 +2773,27 @@ function paintChart(canvas,prog){
     c.fillStyle=ink;c.font='700 12.5px system-ui,sans-serif';c.fillText(t1,bx+11,by+19);c.fillStyle=muted;c.font='500 11.5px system-ui,sans-serif';c.fillText(t2,bx+11,by+35);
   }
 }
+
+/* ---------- intro on app open, welcome portal after sign-in ---------- */
+const INTRO_REPEAT=(()=>{try{return !!sessionStorage.getItem('skinscope-intro');}catch(e){return false;}})();
+const INTRO_MS=INTRO_REPEAT?650:3000;
+if(INTRO_REPEAT){const i=$('#intro');if(i)i.classList.add('quick');}
+let introSkip=null; const introGate=new Promise(r=>{introSkip=r;setTimeout(r,reduceMotion()?0:INTRO_MS);});
+function introOut(){
+  const el=$('#intro'); if(!el||el.classList.contains('out')||el.classList.contains('gone')) return;
+  try{sessionStorage.setItem('skinscope-intro','1');}catch(e){}
+  document.body.classList.add('entering'); el.classList.add('out');
+  setTimeout(()=>{el.classList.add('gone');document.body.classList.remove('entering');},1300);
+}
+function portal(small,name,x,y){
+  return new Promise(res=>{
+    const p=$('#portal'); if(reduceMotion()){res();return;}
+    p.style.setProperty('--x',x+'px');p.style.setProperty('--y',y+'px');
+    $('#portalLogo').innerHTML=LOGO.split('lgG').join('lgP');$('#portalSmall').textContent=small;$('#portalName').textContent=name;
+    p.className='';void p.offsetWidth;p.className='on';setTimeout(res,1600);
+  });
+}
+function portalOut(){const p=$('#portal');if(!p.classList.contains('on'))return;p.classList.add('out');setTimeout(()=>{p.className='';$('#portalLogo').innerHTML='';},650);}
 
 /* ---------- auth screen ---------- */
 function tplAuth(){
@@ -3175,6 +3266,7 @@ window.addEventListener('resize',()=>{if(location.hash.startsWith('#/history'))a
 /* ---------- actions ---------- */
 async function reloadMe(){const j=await api('/api/me');me=j.user;if(j.questions){cfg={questions:j.questions,freq:j.freq,labels:j.labels,zones:j.zones,detector:j.detector};}}
 const ACT={
+  introSkip:()=>{if(introSkip)introSkip();},
   openCam:(a,e)=>{e.stopPropagation();openCam(a.dataset.v);},
   camClose:()=>closeCam(),
   camShoot:()=>camShoot(),
@@ -3184,7 +3276,12 @@ const ACT={
   authMode:a=>{authMode=a.dataset.m;authErr='';mount(tplAuth());},
   authGo:async()=>{
     const body={email:$('#a_email').value,password:$('#a_pw').value};if(authMode==='signup')body.name=$('#a_name').value;
-    try{await api(authMode==='signup'?'/api/signup':'/api/login',body);await reloadMe();location.hash='#/home';route();}
+    try{
+      const wasSignup=authMode==='signup';await api(wasSignup?'/api/signup':'/api/login',body);await reloadMe();
+      const b=$('[data-act=authGo]'),r=b?b.getBoundingClientRect():{left:innerWidth/2,top:innerHeight/2,width:0,height:0};
+      await portal(wasSignup?'Welcome to SkinScope,':'Welcome back,',me.name,r.left+r.width/2,r.top+r.height/2);
+      history.replaceState(null,'','#/home');await route();portalOut();
+    }
     catch(e){authErr=e.message;const el=$('#a_err');if(el)el.textContent=authErr;}
   },
   logout:async()=>{try{await api('/api/logout',{});}catch(e){}me=null;sc={photos:{},canvases:{},checks:{},q:{}};location.hash='';route();},
@@ -3234,7 +3331,10 @@ document.addEventListener('keydown',e=>{if(e.key==='Enter'&&!me&&(e.target.id===
 $('#fileIn').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(f&&pendingView)loadPhotoFile(pendingView,f);});
 
 /* ---------- boot ---------- */
-(async()=>{try{await reloadMe();}catch(e){}route();})();
+(async()=>{
+  try{await reloadMe();if(me){const t=$('#introTag');if(t){t.style.opacity=0;setTimeout(()=>{t.textContent=`Welcome back, ${me.name}`;t.style.opacity=1;},250);}}}catch(e){}
+  await introGate;await route();introOut();
+})();
 </script>
 </body></html>
 '''
