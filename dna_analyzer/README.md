@@ -71,6 +71,11 @@ Open `how_it_works.html` in a browser for an interactive 3D model of the
 pipeline (needs an internet connection to load the 3D library). On a Mac:
 `open how_it_works.html`
 
+Press **Zoom 10× into strands** to dive into the helix at the strand-check
+stage. It shows your variant as two base pairs (one per parent), labels the
+forward and reverse strands, and steps through how a reading from the other
+strand is flipped using the A–T / C–G pairing rule.
+
 | File | Job |
 | --- | --- |
 | `dna_analyzer.py` | Command-line entry point |
