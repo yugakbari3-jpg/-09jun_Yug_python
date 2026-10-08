@@ -2553,6 +2553,108 @@ body.entering #app{animation:appIn 1s .25s cubic-bezier(.2,.8,.2,1) both}
 #confetti{position:fixed;inset:0;z-index:98;pointer-events:none;width:100vw;height:100vh}
 .checkrow.done{animation:tickpop .45s cubic-bezier(.2,.9,.3,1.6)}
 @keyframes tickpop{0%{transform:scale(1)}40%{transform:scale(1.04)}100%{transform:scale(1)}}
+/* ---------- landing page: bold type, lime accent, 3D point-cloud face ---------- */
+.ld{--lime:#d4ff3a;--lime-ink:#0a0a0c;--ld-bg:#0a0a0c;--ld-ink:#f4f4ef;--ld-mut:#9b9ba6;--ld-line:rgba(255,255,255,.12);--ld-card:rgba(255,255,255,.04);position:relative;background:var(--ld-bg);color:var(--ld-ink);overflow-x:clip;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif}
+:root[data-theme=light] .ld{--lime:#c8f526;--ld-bg:#efeee7;--ld-ink:#0c0c10;--ld-mut:#5d5d68;--ld-line:rgba(12,12,16,.14);--ld-card:rgba(12,12,16,.04)}
+.ld ::selection{background:var(--lime);color:var(--lime-ink)}
+.ld .mega{font-family:"Arial Narrow","Helvetica Neue Condensed","Roboto Condensed","Helvetica Neue",Arial,sans-serif;font-stretch:condensed;font-weight:900;text-transform:uppercase;letter-spacing:-.045em;line-height:.8}
+.ld-nav{position:fixed;top:0;left:0;right:0;z-index:30;display:flex;align-items:center;gap:18px;padding:18px 28px;mix-blend-mode:normal;transition:background .3s,backdrop-filter .3s}
+.ld-nav.solid{background:color-mix(in srgb,var(--ld-bg) 78%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--ld-line)}
+.ld-nav .logo span{background:none;color:var(--ld-ink);-webkit-text-fill-color:currentColor}
+.ld-nav .links{display:flex;gap:22px;margin-left:auto;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.ld-nav .links a{color:var(--ld-ink);opacity:.75}.ld-nav .links a:hover{opacity:1;color:var(--lime)}
+:root[data-theme=light] .ld-nav .links a:hover{color:var(--ld-ink);text-decoration:underline;text-decoration-color:var(--lime);text-decoration-thickness:3px}
+.ld-pill{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:99px;padding:12px 22px;font:inherit;font-weight:800;font-size:14px;letter-spacing:.02em;cursor:pointer;background:var(--lime);color:var(--lime-ink);transition:transform .25s cubic-bezier(.2,.9,.3,1.4),box-shadow .25s;box-shadow:0 0 0 0 var(--lime)}
+.ld-pill:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 12px 40px -10px var(--lime);color:var(--lime-ink)}
+.ld-pill.ghost{background:transparent;color:var(--ld-ink);box-shadow:inset 0 0 0 1.5px var(--ld-line)}
+.ld-pill.ghost:hover{box-shadow:inset 0 0 0 1.5px var(--ld-ink);color:var(--ld-ink)}
+.ld-pill .arr{display:inline-block;transition:transform .25s}.ld-pill:hover .arr{transform:translateX(4px)}
+.ld .btn.icon{color:var(--ld-ink);border-color:var(--ld-line);background:transparent}
+@media(max-width:760px){.ld-nav .links{display:none}.ld-nav{padding:14px 16px;gap:10px}.ld-nav .ld-pill{padding:10px 16px}.ld-nav .ld-pill.ghost{display:none}}
+.ld-hero{position:relative;height:100vh;min-height:620px;display:grid;place-items:center;overflow:hidden}
+.ld-blob{position:absolute;width:52vmax;height:52vmax;left:0;top:0;border-radius:50%;pointer-events:none;background:radial-gradient(circle at 40% 40%,color-mix(in srgb,var(--lime) 55%,transparent),transparent 60%),radial-gradient(circle at 65% 60%,rgba(255,95,168,.35),transparent 55%);filter:blur(60px);opacity:.55;transform:translate(-50%,-50%);will-change:transform}
+:root[data-theme=light] .ld-blob{opacity:.7}
+.ld-hero .mega{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:0 3vw;font-size:clamp(84px,21vw,380px);pointer-events:none;user-select:none}
+.ld-hero .mega .r{display:block;white-space:nowrap;will-change:transform}
+.ld-hero .mega .r1{align-self:flex-start}
+.ld-hero .mega .r2{align-self:center;color:transparent;-webkit-text-stroke:2px var(--ld-ink);opacity:.9}
+.ld-hero .mega .r3{align-self:flex-end;color:var(--lime)}
+:root[data-theme=light] .ld-hero .mega .r3{color:var(--ld-ink);-webkit-text-stroke:0;text-shadow:none}
+.ld-hero .mega .ch{display:inline-block;transform:translateY(105%);animation:ldUp .9s cubic-bezier(.2,.8,.2,1) forwards;animation-delay:calc(.15s + var(--i)*45ms)}
+.ld-hero .mega .r{overflow:hidden;padding:0 .02em}
+@keyframes ldUp{to{transform:none}}
+#faceCloud{position:absolute;inset:0;width:100%;height:100%;z-index:2;cursor:grab}
+#faceCloud:active{cursor:grabbing}
+.ld-hud{position:absolute;z-index:3;font:600 11px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ld-mut);pointer-events:none}
+.ld-hud b{color:var(--ld-ink);font-weight:700}
+.ld-hud.tl{top:47%;left:28px}.ld-hud.tr{top:47%;right:28px;text-align:right}
+.ld-hud .live::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--lime);margin-right:7px;box-shadow:0 0 10px var(--lime);animation:twinkle 1.2s infinite}
+.ld-hero-foot{position:absolute;z-index:4;left:28px;right:28px;bottom:28px;display:flex;justify-content:space-between;align-items:flex-end;gap:20px;opacity:0;animation:ifade .8s 1s forwards}
+.ld-hero-foot p{max-width:340px;margin:0 0 14px;font-size:15px;color:var(--ld-mut)}
+.ld-scroll{display:flex;flex-direction:column;align-items:center;gap:8px;font:700 11px ui-monospace,Menlo,monospace;letter-spacing:.2em;color:var(--ld-mut)}
+.ld-scroll i{width:1.5px;height:56px;background:linear-gradient(var(--lime),transparent);animation:scrollcue 1.8s ease-in-out infinite;transform-origin:top}
+@keyframes scrollcue{0%{transform:scaleY(0)}50%{transform:scaleY(1)}100%{transform:scaleY(1);opacity:0}}
+@media(max-width:760px){.ld-hud{display:none}.ld-hero-foot{left:16px;right:16px;bottom:18px}.ld-scroll{display:none}}
+.ld-marquee{position:relative;z-index:5;background:var(--lime);color:var(--lime-ink);transform:rotate(-2.5deg) scale(1.05);margin:-30px 0 40px;padding:18px 0;overflow:hidden;box-shadow:0 20px 60px -20px color-mix(in srgb,var(--lime) 60%,transparent)}
+.ld-marquee .track{display:flex;width:max-content;will-change:transform}
+.ld-marquee span{font-size:clamp(34px,5vw,64px);padding:0 28px;display:inline-flex;align-items:center;gap:28px;white-space:nowrap}
+.ld-marquee span::after{content:"";width:.5em;height:.5em;border-radius:50%;background:var(--lime-ink);display:inline-block}
+.ld-marquee.two{background:var(--ld-ink);color:var(--ld-bg);transform:rotate(2deg) scale(1.05);margin:-60px 0 80px;z-index:4}
+.ld-marquee.two span::after{background:var(--lime)}
+.ld-sec{position:relative;max-width:1320px;margin:0 auto;padding:110px 28px}
+.ld-kick{font:700 12px ui-monospace,Menlo,monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--ld-mut);display:flex;align-items:center;gap:12px}
+.ld-kick::before{content:"";width:34px;height:2px;background:var(--lime)}
+.ld-feat{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:60px;align-items:center;padding:70px 0;border-top:1px solid var(--ld-line)}
+.ld-feat:nth-child(even) .vis{order:-1}
+.ld-feat .num{font-size:clamp(90px,13vw,200px);color:transparent;-webkit-text-stroke:1.5px var(--ld-line);line-height:.8;display:block}
+.ld-feat h3{font-size:clamp(56px,8.5vw,140px);margin:6px 0 18px;line-height:.82}
+.ld-feat h3 em{font-style:normal;color:var(--lime)}
+:root[data-theme=light] .ld-feat h3 em{color:var(--ld-ink);background:linear-gradient(transparent 62%,var(--lime) 62%)}
+.ld-feat p{font-size:17px;line-height:1.65;color:var(--ld-mut);max-width:520px}
+.ld-feat ul{list-style:none;padding:0;margin:20px 0 0;display:grid;gap:10px}
+.ld-feat li{display:flex;gap:12px;align-items:baseline;font-weight:600}
+.ld-feat li::before{content:"";flex:none;width:8px;height:8px;border-radius:2px;background:var(--lime);transform:rotate(45deg) translateY(-1px)}
+.ld-feat .vis{position:relative;aspect-ratio:1/1;border-radius:32px;background:var(--ld-card);border:1px solid var(--ld-line);display:grid;place-items:center;overflow:hidden}
+.ld-feat .vis::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 30% 20%,color-mix(in srgb,var(--lime) 18%,transparent),transparent 55%)}
+.ld-feat .vis>*{position:relative}
+.ld-feat .vis .scanart{width:62%;filter:drop-shadow(0 0 40px color-mix(in srgb,var(--lime) 40%,transparent))}
+.ld-feat .vis .ring{transform:scale(1.6)}
+.ld-feat .vis svg.spark{width:84%;overflow:visible}
+@media(max-width:860px){.ld-feat{grid-template-columns:1fr;gap:30px;padding:50px 0}.ld-feat:nth-child(even) .vis{order:0}.ld-sec{padding:70px 16px}}
+.rv{opacity:0;transform:translateY(60px);transition:opacity 1s cubic-bezier(.2,.8,.2,1),transform 1s cubic-bezier(.2,.8,.2,1)}
+.rv.in{opacity:1;transform:none}
+.rv.d1{transition-delay:.1s}.rv.d2{transition-delay:.2s}.rv.d3{transition-delay:.3s}
+.ld-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid var(--ld-line);border-bottom:1px solid var(--ld-line)}
+.ld-stats>div{padding:44px 28px;border-right:1px solid var(--ld-line)}.ld-stats>div:last-child{border-right:0}
+.ld-stats .big{font-size:clamp(70px,9vw,150px);line-height:.85;color:var(--ld-ink)}
+.ld-stats .big sup{font-size:.35em;color:var(--lime);vertical-align:top;margin-left:4px}
+:root[data-theme=light] .ld-stats .big sup{color:var(--ld-ink)}
+.ld-stats .lab{margin-top:14px;font:700 12px ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--ld-mut)}
+@media(max-width:860px){.ld-stats{grid-template-columns:1fr 1fr}.ld-stats>div:nth-child(2){border-right:0}.ld-stats>div{border-bottom:1px solid var(--ld-line);padding:30px 16px}}
+.ld-join{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:60px;align-items:center}
+.ld-join .mega{font-size:clamp(80px,13vw,230px)}
+.ld-join .mega em{font-style:normal;color:var(--lime);display:block}
+:root[data-theme=light] .ld-join .mega em{color:var(--ld-ink);-webkit-text-stroke:0;background:linear-gradient(transparent 60%,var(--lime) 60%);display:inline}
+.ld-join .box{background:color-mix(in srgb,var(--ld-bg) 70%,#1a1a22);border:1px solid var(--ld-line);border-radius:28px;padding:30px;box-shadow:0 40px 100px -40px color-mix(in srgb,var(--lime) 35%,transparent)}
+:root[data-theme=light] .ld-join .box{background:#fff}
+.ld-join .box .tabs button.on{background:var(--lime);color:var(--lime-ink);box-shadow:none}
+.ld-join .box .btn.p{background:var(--lime);color:var(--lime-ink);text-shadow:none;box-shadow:0 14px 40px -14px var(--lime)}
+.ld-join .box .btn.p:hover{color:var(--lime-ink)}
+.ld-join .box input:focus{border-color:var(--lime);box-shadow:0 0 0 4px color-mix(in srgb,var(--lime) 25%,transparent)}
+@media(max-width:860px){.ld-join{grid-template-columns:1fr;gap:30px}}
+.ld-foot{padding:60px 28px 30px;border-top:1px solid var(--ld-line);overflow:hidden}
+.ld-foot .word{font-size:clamp(70px,17.5vw,330px);line-height:.78;color:transparent;-webkit-text-stroke:1.5px var(--ld-line);white-space:nowrap;text-align:center;margin-top:30px;transition:-webkit-text-stroke-color .4s}
+.ld-foot .word:hover{-webkit-text-stroke-color:var(--lime)}
+.ld-foot .row{justify-content:space-between;color:var(--ld-mut);font-size:13px}
+.ld-cursor{position:fixed;left:0;top:0;z-index:200;pointer-events:none;display:none}
+.ld-cursor .dot{position:fixed;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:var(--lime)}
+.ld-cursor .ring{position:fixed;width:42px;height:42px;margin:-21px 0 0 -21px;border-radius:50%;border:1.5px solid var(--lime);transition:width .25s,height .25s,margin .25s,background .25s,border-color .25s}
+.ld-cursor.hover .ring{width:78px;height:78px;margin:-39px 0 0 -39px;background:color-mix(in srgb,var(--lime) 18%,transparent)}
+.ld-cursor.drag .ring{width:110px;height:110px;margin:-55px 0 0 -55px;border-style:dashed}
+.ld-cursor .lbl{position:fixed;transform:translate(-50%,-50%);font:800 10px ui-monospace,Menlo,monospace;letter-spacing:.14em;color:var(--lime);opacity:0;transition:opacity .2s;white-space:nowrap}
+.ld-cursor.drag .lbl{opacity:1}
+@media (pointer:fine){.ld-cursor.on{display:block}.ld.cur-on,.ld.cur-on a,.ld.cur-on button,.ld.cur-on #faceCloud{cursor:none}}
+@media (prefers-reduced-motion:reduce){.ld-hero .mega .ch{transform:none;animation:none}.rv{opacity:1;transform:none}}
 </style></head>
 <body>
 <div id="intro" aria-hidden="true" data-act="introSkip">
@@ -2813,26 +2915,143 @@ function portal(small,name,x,y){
 function portalOut(){const p=$('#portal');if(!p.classList.contains('on'))return;p.classList.add('out');setTimeout(()=>{p.className='';$('#portalLogo').innerHTML='';},650);}
 
 /* ---------- auth screen ---------- */
-function tplAuth(){
+/* ---------- landing page ---------- */
+function tplAuthBox(){
   const su=authMode==='signup';
-  return `<div class="auth"><div class="themebtn">${themeBtn()}</div><div class="l"><div class="logo" style="font-size:24px;margin-bottom:26px">${LOGO}<span>SkinScope</span></div>
-   <div class="art">${scanArt()}</div>
-   <h1>Know your skin.<br><em>Get ahead of breakouts.</em></h1>
-   <p class="muted" style="font-size:17px;max-width:520px">Upload a selfie, get a skin report in seconds, see what may be behind your breakouts, and follow a plan you can act on.</p>
-   <div class="feat"><span class="chip">1</span><div><b>Upload a selfie</b><span class="muted small">Front and side photos, taken in daylight.</span></div></div>
-   <div class="feat"><span class="chip">2</span><div><b>Get your report</b><span class="muted small">Acne, dark marks, oiliness, breakout outlook and a nutrition watch-list.</span></div></div>
-   <div class="feat"><span class="chip">3</span><div><b>Follow your plan</b><span class="muted small">Foods, habits and a simple skincare routine, with progress tracking.</span></div></div>
-   <p class="tiny muted" style="margin-top:20px">Your account and photos stay on this computer. Photos are analysed and never saved.</p></div>
-   <div class="r"><div class="box card">
-    <div class="tabs"><button class="${su?'':'on'}" data-act="authMode" data-m="login">Sign in</button><button class="${su?'on':''}" data-act="authMode" data-m="signup">Create account</button></div>
+  return `<div class="tabs"><button class="${su?'':'on'}" data-act="authMode" data-m="login">Sign in</button><button class="${su?'on':''}" data-act="authMode" data-m="signup">Create account</button></div>
     ${su?`<label class="f">Your name</label><input type="text" id="a_name" maxlength="60" autocomplete="name">`:''}
     <label class="f">Email</label><input type="email" id="a_email" autocomplete="email">
     <label class="f">Password ${su?'(at least 8 characters)':''}</label><input type="password" id="a_pw" autocomplete="${su?'new-password':'current-password'}">
     <div class="err" id="a_err">${esc(authErr)}</div>
     <button class="btn p big" style="width:100%;justify-content:center" data-act="authGo">${su?'Create my account':'Sign in'}</button>
-    <p class="tiny muted" style="margin-top:12px">${su?'By creating an account you confirm this is not medical advice.':'Forgot your password? In the terminal run: python skinscope_app.py --reset-password YOUR_EMAIL'}</p>
-   </div></div></div>`;
+    <p class="tiny muted" style="margin-top:12px">${su?'By creating an account you confirm this is not medical advice.':'Forgot your password? In the terminal run: python skinscope_app.py --reset-password YOUR_EMAIL'}</p>`;
 }
+const splitCh=(t,o=0)=>[...t].map((c,i)=>`<span class="ch" style="--i:${i+o}">${c===' '?'&nbsp;':esc(c)}</span>`).join('');
+function tplAuth(){
+  const mq=(words)=>{const one=words.map(w=>`<span>${w}</span>`).join('');return `<div class="track">${one}${one}${one}${one}</div>`;};
+  const spark=`<svg class="spark" viewBox="0 0 300 200" aria-hidden="true"><defs><linearGradient id="spG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d4ff3a" stop-opacity=".45"/><stop offset="1" stop-color="#d4ff3a" stop-opacity="0"/></linearGradient></defs>
+    <g style="stroke:var(--ld-line)" stroke-width="1">${[40,80,120,160].map(y=>`<line x1="0" x2="300" y1="${y}" y2="${y}"/>`).join('')}</g>
+    <path d="M0 150 C40 140 60 120 90 125 S140 95 170 90 S220 60 250 52 S285 40 300 34 L300 200 L0 200Z" fill="url(#spG)"/>
+    <path d="M0 150 C40 140 60 120 90 125 S140 95 170 90 S220 60 250 52 S285 40 300 34" fill="none" stroke="#d4ff3a" stroke-width="3" stroke-linecap="round"/>
+    ${[[0,150],[90,125],[170,90],[250,52]].map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="5" fill="#d4ff3a" style="stroke:var(--ld-bg)" stroke-width="3"/>`).join('')}
+    <circle cx="300" cy="34" r="9" fill="#d4ff3a"/><circle cx="300" cy="34" r="16" fill="none" stroke="#d4ff3a" stroke-opacity=".4" stroke-width="2"/>
+    <text x="300" y="16" text-anchor="end" font-weight="900" font-size="18" style="fill:var(--ld-ink)">86</text></svg>`;
+  return `<div class="ld" id="landing">
+   <div class="ld-cursor" id="ldCursor"><div class="ring"></div><div class="dot"></div><div class="lbl">DRAG</div></div>
+   <nav class="ld-nav" id="ldNav"><span class="logo" data-act="ldTo" data-to="landing">${LOGO}<span>SkinScope</span></span>
+    <div class="links"><a href="#" data-act="ldTo" data-to="ld-how">How it works</a><a href="#" data-act="ldTo" data-to="ld-privacy">Privacy</a></div>
+    ${themeBtn()}<button class="ld-pill ghost" data-act="ldJoin" data-m="login">Sign in</button><button class="ld-pill" data-act="ldJoin" data-m="signup">Get started <span class="arr">&rarr;</span></button></nav>
+   <section class="ld-hero" id="ldHero"><div class="ld-blob" id="ldBlob"></div>
+    <h1 class="mega" aria-label="Know your skin"><span class="r r1">${splitCh('Know')}</span><span class="r r2">${splitCh('Your',4)}</span><span class="r r3">${splitCh('Skin',8)}</span></h1>
+    <canvas id="faceCloud" aria-label="Rotating 3D face scan. Drag to turn it."></canvas>
+    <div class="ld-hud tl"><div class="live">Live face scan</div><div>Points <b id="hudPts">0</b></div><div>Zones <b>05</b></div></div>
+    <div class="ld-hud tr"><div>Yaw <b id="hudYaw">0&deg;</b></div><div>Scan <b id="hudScan">0%</b></div><div>Spots <b id="hudSpots">0</b></div></div>
+    <div class="ld-hero-foot"><div><p>Take a selfie. Get a skin report in seconds. Find out what is behind your breakouts and follow a plan that fits you.</p><button class="ld-pill" data-act="ldJoin" data-m="signup">Start your first scan <span class="arr">&rarr;</span></button></div><div class="ld-scroll">SCROLL<i></i></div></div>
+   </section>
+   <div class="ld-marquee mega" data-speed="1">${mq(['Scan','Score','Plan','Track','Repeat'])}</div>
+   <div class="ld-marquee two mega" data-speed="-0.7">${mq(['Acne','Dark marks','Oiliness','Breakouts','Nutrition'])}</div>
+   <section class="ld-sec" id="ld-how"><div class="ld-kick rv">How it works</div>
+    <div class="ld-feat"><div><span class="num mega rv">01</span><h3 class="mega rv d1">Snap a <em>selfie</em></h3><p class="rv d2">Use your camera or upload a photo. Live checks tell you when the light, focus and distance are right, then it takes the photo for you.</p>
+      <ul class="rv d3"><li>Front and side views</li><li>Auto-capture when the photo is good</li><li>Photos are never saved</li></ul></div><div class="vis rv d1">${scanArt()}</div></div>
+    <div class="ld-feat"><div><span class="num mega rv">02</span><h3 class="mega rv d1">Get your <em>score</em></h3><p class="rv d2">Active spots and dark marks counted across five face zones, plus oiliness, redness evenness and a 7-day breakout outlook.</p>
+      <ul class="rv d3"><li>Spots drawn on your photo</li><li>Check the detections yourself</li><li>A nutrition watch-list backed by research notes</li></ul></div><div class="vis rv d1">${ring(86,150)}</div></div>
+    <div class="ld-feat"><div><span class="num mega rv">03</span><h3 class="mega rv d1">Track <em>progress</em></h3><p class="rv d2">Scan every week. Watch your score trend, see your hotspots, and test your own triggers in the Trigger Lab with honest statistics.</p>
+      <ul class="rv d3"><li>Score history and hotspot map</li><li>Daily routine streaks</li><li>Printable summary for your doctor</li></ul></div><div class="vis rv d1">${spark}</div></div>
+   </section>
+   <div class="ld-stats" id="ld-privacy">
+    <div class="rv"><div class="big mega"><span data-count="5">5</span></div><div class="lab">Face zones analysed</div></div>
+    <div class="rv d1"><div class="big mega"><span data-count="7">7</span></div><div class="lab">Nutrients on the watch-list</div></div>
+    <div class="rv d2"><div class="big mega"><span data-count="0">0</span></div><div class="lab">Photos ever stored</div></div>
+    <div class="rv d3"><div class="big mega"><span data-count="100">100</span><sup>%</sup></div><div class="lab">On your own computer</div></div></div>
+   <section class="ld-sec ld-join" id="ldJoin"><div><div class="ld-kick rv">Free, private, yours</div><h2 class="mega rv d1">Ready to<em>start?</em></h2>
+     <p class="rv d2" style="color:var(--ld-mut);max-width:440px;font-size:16px">Your account and results stay on this computer. SkinScope is an information tool, not a medical device or diagnosis.</p></div>
+    <div class="box rv d2" id="authBox">${tplAuthBox()}</div></section>
+   <footer class="ld-foot"><div class="row"><span>SkinScope &middot; runs locally</span>${themeBtn()}<span>Not medical advice</span></div><div class="word mega">SkinScope</div></footer>
+  </div>`;
+}
+
+/* 3D point-cloud face drawn on a 2D canvas: no libraries, no network */
+function headCloud(){
+  const P=[],N=4600,g=(x,y,cx,cy,sx,sy)=>Math.exp(-(((x-cx)**2)/(2*sx*sx)+((y-cy)**2)/(2*sy*sy)));
+  for(let i=0;i<N;i++){
+    const y=1-2*(i+.5)/N,r=Math.sqrt(1-y*y),th=i*2.399963;
+    let X=Math.cos(th)*r*.8,Y=y*1.12,Z=Math.sin(th)*r*.9;
+    if(Y<0){const k=1-.34*Math.pow(-Y/1.12,1.7);X*=k;Z*=.88+.12*k;}
+    let kind=0;
+    if(Z>0){const f=Z;
+      Z+=f*(.26*g(X,Y,0,-.06,.07,.2)+.12*g(X,Y,0,-.3,.09,.06)-.12*(g(X,Y,-.3,.18,.12,.07)+g(X,Y,.3,.18,.12,.07))+.07*(g(X,Y,-.3,.33,.17,.04)+g(X,Y,.3,.33,.17,.04))+.05*g(X,Y,0,-.56,.17,.05)+.06*g(X,Y,0,-.86,.2,.1));
+      const eye=Math.min(Math.hypot((X+.3)/1.6,Y-.18),Math.hypot((X-.3)/1.6,Y-.18));
+      if(Math.abs(eye-.06)<.016||(Math.abs(Y+.56)<.014&&Math.abs(X)<.17)||(Math.abs(X)<.012&&Y<.12&&Y>-.3))kind=1;
+    }
+    P.push([X,Y,Z,kind]);
+  }
+  /* bright feature lines (eyes, brows, nose, lips) laid onto the same surface */
+  const surf=(X,Y)=>{const e=1-(X/.8)**2-(Y/1.12)**2;if(e<=0)return null;let Z=Math.sqrt(e)*.9;
+    Z+=Z*(.26*g(X,Y,0,-.06,.07,.2)+.12*g(X,Y,0,-.3,.09,.06)-.12*(g(X,Y,-.3,.18,.12,.07)+g(X,Y,.3,.18,.12,.07))+.07*(g(X,Y,-.3,.33,.17,.04)+g(X,Y,.3,.33,.17,.04))+.05*g(X,Y,0,-.56,.17,.05)+.06*g(X,Y,0,-.86,.2,.1));return Z+.01;};
+  const addF=(X,Y)=>{if(Y<0){const k=1-.34*Math.pow(-Y/1.12,1.7);X*=k;}const Z=surf(X,Y);if(Z!=null)P.push([X,Y,Z,1]);};
+  for(let i=0;i<=90;i++){const a=i/90*6.283;for(const sx of[-.3,.3]){addF(sx+Math.cos(a)*.11,.18+Math.sin(a)*.045);}}
+  for(let i=0;i<=40;i++){const u=i/40;for(const sx of[-1,1]){addF(sx*(.15+u*.28),.33+Math.sin(u*3.14)*.04-u*.02);}}
+  for(let i=0;i<=40;i++){const u=i/40;addF(0,.12-u*.42);}
+  for(let i=0;i<=24;i++){const u=i/24;addF(-.09+u*.18,-.32-Math.sin(u*3.14)*.025);}
+  for(let i=0;i<=50;i++){const u=i/50,x=-.19+u*.38;addF(x,-.55+ (x*x)*.9);addF(x*.85,-.57-.05*Math.sin(u*3.14));}
+  let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+  for(let k=0;k<14;){const i=Math.floor(rnd()*N),p=P[i];if(p[2]>.35&&p[3]===0&&Math.abs(p[0])>.12&&p[1]<.5){p[3]=2;p.push(rnd()*6.28);k++;}}
+  return P;
+}
+let LD=null;
+function startLanding(){
+  stopLanding(); const root=$('#landing'); if(!root) return;
+  const cv=$('#faceCloud'),ctx=cv.getContext('2d'),pts=headCloud(),rm=reduceMotion(),fine=matchMedia('(pointer:fine)').matches;
+  const st={root,yaw:-.5,pitch:.06,vyaw:0,tYaw:0,mx:0,my:0,drag:null,sy:scrollY,vel:0,t0:performance.now(),raf:0,cur:{x:innerWidth/2,y:innerHeight/2,rx:innerWidth/2,ry:innerHeight/2},blob:{x:innerWidth*.5,y:innerHeight*.45},mq:[...root.querySelectorAll('.ld-marquee')].map(el=>({el,tr:el.querySelector('.track'),x:0,sp:+el.dataset.speed}))};
+  LD=st; $('#hudPts').textContent=pts.length.toLocaleString();
+  const cur=$('#ldCursor'); if(fine&&!rm){cur.classList.add('on');root.classList.add('cur-on');}
+  const resize=()=>{const d=Math.min(2,devicePixelRatio||1);cv.width=cv.clientWidth*d;cv.height=cv.clientHeight*d;st.dpr=d;};
+  st.on=[[window,'resize',resize],[window,'pointermove',e=>{st.mx=e.clientX/innerWidth-.5;st.my=e.clientY/innerHeight-.5;st.cur.x=e.clientX;st.cur.y=e.clientY;
+      if(st.drag){st.yaw=st.drag.yaw+(e.clientX-st.drag.x)*.008;st.pitch=Math.max(-.6,Math.min(.6,st.drag.pitch+(e.clientY-st.drag.y)*.004));st.vyaw=(e.clientX-st.drag.lx)*.008;st.drag.lx=e.clientX;}
+      const h=e.target.closest&&e.target.closest('a,button,input,label,select');cur.classList.toggle('hover',!!h&&!st.drag);cur.classList.toggle('drag',!h&&!!e.target.closest&&!!e.target.closest('#faceCloud'));}],
+    [cv,'pointerdown',e=>{st.drag={x:e.clientX,y:e.clientY,lx:e.clientX,yaw:st.yaw,pitch:st.pitch};cv.setPointerCapture&&cv.setPointerCapture(e.pointerId);}],
+    [window,'pointerup',()=>{st.drag=null;}]];
+  st.on.forEach(([t,n,f])=>t.addEventListener(n,f,{passive:true}));resize();
+  const io=new IntersectionObserver(es=>es.forEach(en=>{if(en.isIntersecting){en.target.classList.add('in');if(en.target.querySelector('[data-count]'))fx(en.target);io.unobserve(en.target);}}),{threshold:.18});
+  root.querySelectorAll('.rv').forEach(el=>io.observe(el)); st.io=io;
+  const hero=$('#ldHero'),rows=[...root.querySelectorAll('.ld-hero .mega .r')],nav=$('#ldNav'),blob=$('#ldBlob');
+  const light=()=>THEME==='light';
+  const frame=now=>{
+    if(!document.body.contains(root)){stopLanding();return;}
+    const t=(now-st.t0)/1000,sy=scrollY,dv=sy-st.sy;st.sy=sy;st.vel+=(dv-st.vel)*.12;
+    const H=hero.offsetHeight,prog=Math.min(1,Math.max(0,sy/H));
+    nav.classList.toggle('solid',sy>40);
+    rows.forEach((r,i)=>{const dir=i===1?0:(i===0?-1:1);r.style.transform=`translateX(${dir*prog*28}vw) skewX(${Math.max(-12,Math.min(12,-st.vel*.25))}deg)`;});
+    st.blob.x+=(st.cur.x-st.blob.x)*.06;st.blob.y+=(st.cur.y+sy*0-st.blob.y)*.06;blob.style.transform=`translate(${st.blob.x}px,${st.blob.y}px) translate(-50%,-50%) scale(${1+Math.min(.4,Math.abs(st.vel)*.01)})`;
+    st.mq.forEach(m=>{m.x-=(1.1+Math.min(14,Math.abs(st.vel)*.35))*m.sp*(st.vel<-1?-1:1);const w=m.tr.scrollWidth/4;if(w){if(m.x<-w)m.x+=w;if(m.x>0)m.x-=w;}m.tr.style.transform=`translateX(${m.x}px)`;});
+    if(!st.drag&&(st.fc=(st.fc||0)+1)%6===0){const el=document.elementFromPoint(st.cur.x,st.cur.y);const h=el&&el.closest('a,button,input,label,select');cur.classList.toggle('hover',!!h);cur.classList.toggle('drag',!h&&!!el&&el.id==='faceCloud');}
+    st.cur.rx+=(st.cur.x-st.cur.rx)*.18;st.cur.ry+=(st.cur.y-st.cur.ry)*.18;
+    cur.firstElementChild.style.transform=`translate(${st.cur.rx}px,${st.cur.ry}px)`;cur.children[1].style.transform=`translate(${st.cur.x}px,${st.cur.y}px)`;cur.children[2].style.transform=`translate(${st.cur.rx}px,${st.cur.ry+62}px)`;
+    if(sy<H*1.1){
+      if(!st.drag){st.vyaw*=.94;st.yaw+=st.vyaw+(rm?0:.0035);}
+      const yaw=st.yaw+st.mx*.7+prog*2.2,pitch=st.pitch+st.my*.3;
+      const W=cv.width,Hc=cv.height,d=st.dpr,R=Math.min(W,Hc)*.31*(1+prog*.35),cx=W/2,cy=Hc*.5-prog*Hc*.15;
+      ctx.clearRect(0,0,W,Hc);ctx.globalCompositeOperation=light()?'source-over':'lighter';
+      const cyw=Math.cos(yaw),syw=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch),scan=rm?.2:1.15-((t*.42)%1.6)/1.6*2.3,D=3.4;
+      let spots=0;
+      for(const p of pts){
+        const x1=p[0]*cyw+p[2]*syw,z1=-p[0]*syw+p[2]*cyw,y1=p[1]*cp-z1*sp,z2=p[1]*sp+z1*cp,s=D/(D-z2),X=cx+x1*R*s,Y=cy-y1*R*s,dep=(z2+1.15)/2.3;
+        if(dep<.02)continue;
+        const near=Math.abs(p[1]-scan)<.05,sz=(.8+1.6*dep)*d;
+        if(p[3]===2&&z2>0){spots++;const pu=.6+.4*Math.sin(t*3+p[4]);ctx.fillStyle=`rgba(255,95,168,${.5+.5*pu})`;ctx.beginPath();ctx.arc(X,Y,(2.6+2*pu)*d,0,6.283);ctx.fill();continue;}
+        if(p[3]===1&&z2>-.1){const fz=sz*1.25;ctx.fillStyle=light()?`rgba(60,80,0,${.5+.5*dep})`:`rgba(212,255,58,${.55+.45*dep})`;ctx.fillRect(X-fz*.7,Y-fz*.7,fz*1.4,fz*1.4);continue;}
+        if(near||p[3]===1){ctx.fillStyle=light()?`rgba(70,95,0,${.35+.65*dep})`:`rgba(212,255,58,${.35+.65*dep})`;ctx.fillRect(X-sz*.7,Y-sz*.7,sz*1.4,sz*1.4);}
+        else{const a=(.08+.62*dep*dep)*(light()?1.1:1);ctx.fillStyle=light()?`rgba(12,12,16,${a})`:`rgba(244,244,239,${a})`;ctx.fillRect(X-sz/2,Y-sz/2,sz,sz);}
+      }
+      ctx.globalCompositeOperation='source-over';
+      $('#hudYaw').textContent=(((yaw*180/Math.PI)%360+540)%360-180).toFixed(0)+'°';$('#hudScan').textContent=Math.round(Math.max(0,Math.min(1,(1.15-scan)/2.3))*100)+'%';$('#hudSpots').textContent=spots;
+    }
+    if(!rm)st.raf=requestAnimationFrame(frame);
+  };
+  st.raf=requestAnimationFrame(frame);
+  if(rm){const again=()=>{if(LD===st&&document.body.contains(root)){frame(performance.now());}};st.on.push([window,'scroll',again]);window.addEventListener('scroll',again,{passive:true});st.on.push([window,'pointermove',again]);window.addEventListener('pointermove',again,{passive:true});}
+}
+function stopLanding(){if(!LD)return;cancelAnimationFrame(LD.raf);(LD.on||[]).forEach(([t,n,f])=>t.removeEventListener(n,f));LD.io&&LD.io.disconnect();LD=null;}
 
 /* ---------- shell ---------- */
 function shell(active,inner){
@@ -3324,7 +3543,8 @@ const AFTER={results:()=>afterResults(window._resId),history:afterHistory,summar
 function mount(html){$('#app').innerHTML=html;}
 async function route(){
   const parts=(location.hash.replace(/^#\/?/,'')||'home').split('/'),name=parts[0],arg=parts[1];
-  if(!me){mount(tplAuth());return;}
+  if(!me){if(!$('#landing')){mount(tplAuth());window.scrollTo(0,0);startLanding();}return;}
+  stopLanding();
   const fn=VIEWS[name]||VIEWS.home,key=VIEWS[name]?name:'home';
   busy(false);closeCam();window._key=key;
   mount(shell(key,'<div class="card loading"><span class="spinner"></span><span class="muted">Loading...</span></div>'));
@@ -3344,7 +3564,9 @@ const ACT={
   camFlip:async()=>{if(!cam)return;cam.facing=cam.facing==='user'?'environment':'user';cam.good=0;await camStart();},
   camUpload:()=>{const v=cam?cam.view:'front';closeCam();pendingView=v;$('#fileIn').click();},
   theme:()=>{THEME=THEME==='dark'?'light':'dark';applyTheme();$$('[data-act=theme]').forEach(b=>b.innerHTML=ic(THEME==='dark'?'sun':'moon'));const k=window._key;if(me&&AFTER[k])AFTER[k]();},
-  authMode:a=>{authMode=a.dataset.m;authErr='';mount(tplAuth());},
+  authMode:a=>{authMode=a.dataset.m;authErr='';const b=$('#authBox');if(b){b.innerHTML=tplAuthBox();const f=$(authMode==='signup'?'#a_name':'#a_email');if(f)f.focus({preventScroll:true});}else{mount(tplAuth());startLanding();}},
+  ldTo:(a,e)=>{e.preventDefault();const id=a.dataset.to;if(id==='landing'){scrollTo({top:0,behavior:'smooth'});return;}const el=document.getElementById(id);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},
+  ldJoin:a=>{authMode=a.dataset.m||'signup';authErr='';const b=$('#authBox');if(b)b.innerHTML=tplAuthBox();const j=$('#ldJoin');if(j)j.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>{const f=$(authMode==='signup'?'#a_name':'#a_email');if(f)f.focus({preventScroll:true});},700);},
   authGo:async()=>{
     const body={email:$('#a_email').value,password:$('#a_pw').value};if(authMode==='signup')body.name=$('#a_name').value;
     try{
