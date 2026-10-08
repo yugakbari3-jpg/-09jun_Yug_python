@@ -2186,6 +2186,8 @@ HTML = r'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SkinScope - skin analysis</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%238b6cff'/%3E%3Cstop offset='.6' stop-color='%23ff5fa8'/%3E%3Cstop offset='1' stop-color='%2322d3ee'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='1' y='1' width='30' height='30' rx='10' fill='url(%23g)'/%3E%3Ccircle cx='14' cy='14' r='6.5' fill='none' stroke='%23fff' stroke-width='2.6'/%3E%3Cpath d='M19 19l5.5 5.5' stroke='%23fff' stroke-width='2.8' stroke-linecap='round'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#07060f">
 <style>
 :root{color-scheme:dark;
  --bg:#07060f;--surface:rgba(22,19,44,.62);--surface-solid:#14112a;--surface2:rgba(255,255,255,.035);--topbar:rgba(9,8,20,.72);
@@ -2536,6 +2538,21 @@ body.entering #app{animation:appIn 1s .25s cubic-bezier(.2,.8,.2,1) both}
 #portal .pw b{display:block;font-size:clamp(34px,6vw,54px);font-weight:880;letter-spacing:-.04em;line-height:1.1}
 #portal.out .pw{animation:introZoom .6s cubic-bezier(.7,0,.3,1) forwards}
 @media (prefers-reduced-motion:reduce){#intro,#portal{display:none!important}}
+.heatwrap{position:relative;width:100%;max-width:260px;margin:0 auto}
+.heatwrap .facemap{max-width:none}
+.heatwrap canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;mix-blend-mode:screen;animation:fadein 1.2s .2s both}
+:root[data-theme=light] .heatwrap canvas{mix-blend-mode:multiply}
+.heatlegend{display:flex;align-items:center;gap:8px;justify-content:center;margin-top:10px;font-size:12px;color:var(--muted)}
+.heatlegend i{width:120px;height:8px;border-radius:99px;background:linear-gradient(90deg,rgba(255,95,168,.08),rgba(255,95,168,.55),#ff5fa8,#ffd1e6)}
+:root[data-theme=light] .heatlegend i{background:linear-gradient(90deg,rgba(190,24,93,.08),rgba(190,24,93,.45),#be185d,#831843)}
+.zrank{display:grid;gap:12px}
+.zrank .zr{display:grid;grid-template-columns:110px 1fr 46px;gap:12px;align-items:center;font-size:14px;font-weight:600}
+.zrank .zr .t{height:10px;border-radius:99px;background:var(--track);overflow:hidden}
+.zrank .zr .t i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--brand),var(--brand2));transform-origin:left;animation:grow 1.1s cubic-bezier(.2,.8,.2,1) both}
+.zrank .zr b{text-align:right;font-variant-numeric:tabular-nums}
+#confetti{position:fixed;inset:0;z-index:98;pointer-events:none;width:100vw;height:100vh}
+.checkrow.done{animation:tickpop .45s cubic-bezier(.2,.9,.3,1.6)}
+@keyframes tickpop{0%{transform:scale(1)}40%{transform:scale(1.04)}100%{transform:scale(1)}}
 </style></head>
 <body>
 <div id="intro" aria-hidden="true" data-act="introSkip">
@@ -2838,7 +2855,7 @@ function tplHome(d){
     <div class="card stat">${L?ring(L.score,110):`<div class="ic">${ic('scan')}</div><div class="n">--</div>`}<div class="small muted">Skin score</div>${L?`<div class="chip">${esc(L.grade)}</div>`:''}</div>
     <div class="card stat"><div class="ic">${ic('shield')}</div><div class="n">${L?esc(L.outlook.charAt(0).toUpperCase()+L.outlook.slice(1)):'--'}</div><div class="small muted">Breakout outlook</div>${L?`<a class="small" href="#/results/${L.id}">See why</a>`:''}</div>
     <div class="card stat"><div class="ic">${ic('dots')}</div><div class="n" ${L?`data-count="${L.spots}"`:''}>${L?L.spots:'--'}</div><div class="small muted">Active spots (latest)</div></div>
-    <div class="card stat"><div class="ic">${ic('flame')}</div><div class="n" data-count="${d.routine_streak}">${d.routine_streak}</div><div class="small muted">Day routine streak</div></div>
+    <div class="card stat"><div class="ic">${ic('flame')}</div><div class="n" id="streakN" data-count="${d.routine_streak}">${d.routine_streak}</div><div class="small muted">Day routine streak</div></div>
    </div>
    ${d.profile_done?'':`<div class="note info" style="margin-bottom:18px"><b>Finish your profile</b> for safer, more accurate advice (diet, pregnancy status, ingredients you react to). <a href="#/profile">Open profile</a></div>`}
    ${d.lab?`<div class="card"><h3>Trigger Lab &middot; day ${d.lab.day} of ${d.lab.days}: ${esc(d.lab.label)}</h3><p class="small muted" style="margin:4px 0 10px">${esc(d.lab.ask)}</p><div class="row"><button class="btn ${d.lab.today===true?'p':''}" data-act="labCheckin" data-ok="1">Yes</button><button class="btn ${d.lab.today===false?'p':''}" data-act="labCheckin" data-ok="0">No</button><a class="small" href="#/lab">Open Trigger Lab</a></div></div>`:''}
@@ -3102,6 +3119,7 @@ function tplHistory(h){
   hist=h; const ok=h.scans.filter(s=>s.ok);
   return `<h2>History</h2>
    <div class="card"><h3>Skin score over time</h3><canvas class="chart" id="hChart"></canvas>${h.hidden?`<p class="tiny muted">${h.hidden} older scan(s) made with a different detector, version or sensitivity are kept but hidden.</p>`:''}</div>
+   ${tplHotspots(ok)}
    <div class="card"><h3>Compare two scans</h3>${ok.length<2?'<p class="muted small">Save at least two good scans to compare them.</p>':`<div class="row"><select id="cmpA" data-act="cmpChange" style="max-width:280px">${ok.map(s=>`<option value="${s.id}">${fmtDT(s.ts)} - score ${s.score}</option>`).join('')}</select><span class="muted">vs</span><select id="cmpB" data-act="cmpChange" style="max-width:280px">${ok.map(s=>`<option value="${s.id}">${fmtDT(s.ts)} - score ${s.score}</option>`).join('')}</select></div>
      <div class="grid g2" style="margin-top:12px"><div id="mapA"></div><div id="mapB"></div></div><div class="note info small" id="cmpSum" style="margin-top:10px"></div>`}</div>
    <div class="card"><h3>All scans</h3>${h.scans.length?`<table><thead><tr><th>Date</th><th>Score</th><th>Grade</th><th>Spots</th><th>Marks</th><th></th></tr></thead><tbody>${h.scans.slice().reverse().map(s=>`<tr><td><a href="#/results/${s.id}">${fmtDT(s.ts)}</a> ${s.ok?'':'<span class="chip warn">low quality</span>'}</td><td><b>${s.score}</b></td><td>${esc(s.grade)}</td><td>${s.spots}</td><td>${s.marks}</td><td><button class="btn sm danger" data-act="delScan" data-id="${s.id}">Delete</button></td></tr>`).join('')}</tbody></table>`:'<p class="muted">No scans yet. <a href="#/scan">Take your first scan</a>.</p>'}</div>`;
@@ -3114,8 +3132,61 @@ function renderCompare(){
   const m=matchLesions(a.lesions,b.lesions);$('#cmpSum').innerHTML=`Score ${a.score} &rarr; <b>${b.score}</b> (${b.score-a.score>=0?'+':''}${b.score-a.score}). Active spots ${a.spots} &rarr; <b>${b.spots}</b>. About ${m.cleared} cleared, ${m.added} new, ${m.kept} still there. ${noiseSentence(a.spots,b.spots)}`;
 }
 function afterHistory(){
-  if(!hist)return;const ok=hist.scans.filter(s=>s.ok);drawChart($('#hChart'),[{color:cssv('--brand'),name:'Skin score',pts:ok.map(s=>[s.ts*1000,s.score])}],[]);
+  if(!hist)return;const ok=hist.scans.filter(s=>s.ok);drawHeat(ok);drawChart($('#hChart'),[{color:cssv('--brand'),name:'Skin score',pts:ok.map(s=>[s.ts*1000,s.score])}],[]);
   if($('#cmpA')&&ok.length>=2){$('#cmpA').value=ok[Math.max(0,ok.length-2)].id;$('#cmpB').value=ok[ok.length-1].id;renderCompare();}
+}
+
+/* ---------- hotspot heatmap: where active spots keep appearing across good scans ---------- */
+function tplHotspots(ok){
+  const act=ok.flatMap(s=>(s.lesions||[]).filter(l=>l[3]!=='m'));
+  if(!ok.length||!act.length) return `<div class="card"><h3>Your hotspots</h3><p class="muted small">After a few good scans, this map shows where on your face spots keep coming back.</p></div>`;
+  const tot={};for(const s of ok)for(const [z,n] of Object.entries(s.by_zone||{}))tot[z]=(tot[z]||0)+n;
+  const sum=Object.values(tot).reduce((a,b)=>a+b,0)||1, rows=Object.entries(tot).sort((a,b)=>b[1]-a[1]), top=rows[0];
+  return `<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">Your hotspots</h3><span class="chip grey">${ok.length} good scan${ok.length===1?'':'s'} &middot; ${act.length} spots</span></div>
+   <div class="grid g2" style="margin-top:14px;align-items:center">
+    <div><div class="heatwrap"><svg viewBox="0 0 200 260" class="facemap">${FACE_DEFS}${FACE_BASE}${Object.values(cfg.zones).map(f=>`<rect x="${FX+FW*f[0]}" y="${FY+FH*f[2]}" width="${FW*(f[1]-f[0])}" height="${FH*(f[3]-f[2])}" rx="10" fill="none" style="stroke:var(--line2)" stroke-dasharray="3 4"/>`).join('')}</svg><canvas id="heatCanvas" width="400" height="520"></canvas></div>
+     <div class="heatlegend">fewer <i></i> more</div></div>
+    <div><p style="margin:0 0 14px">${!(top&&top[1])?'No clear hotspot yet.':top[1]/sum>=0.35?`Most of your spots show up on your <b>${esc(cfg.labels[top[0]].toLowerCase())}</b> (${Math.round(100*top[1]/sum)}% of all active spots).`:`Your spots are spread fairly evenly. Your <b>${esc(cfg.labels[top[0]].toLowerCase())}</b> has slightly more than other areas (${Math.round(100*top[1]/sum)}%).`}</p>
+     <div class="zrank">${rows.map(([z,n])=>`<div class="zr"><span><span class="dot" style="background:${ZC[z]};color:${ZC[z]}"></span>${esc(cfg.labels[z])}</span><div class="t"><i style="width:${Math.round(100*n/sum)}%"></i></div><b>${Math.round(100*n/sum)}%</b></div>`).join('')}</div>
+     <p class="tiny muted" style="margin-top:14px">${zoneTip(top&&top[0])}</p></div></div></div>`;
+}
+function zoneTip(z){
+  return ({forehead:'Forehead spots are often linked to hair products, fringes and sweat. Keep hair and pomades off your forehead.',
+    left_cheek:'Cheek spots can come from phones, pillowcases and touching your face. Wipe your phone and change pillowcases often.',
+    right_cheek:'Cheek spots can come from phones, pillowcases and touching your face. Wipe your phone and change pillowcases often.',
+    nose:'The nose is an oily area, so clogged pores show up here. A salicylic acid product can help.',
+    chin:'Chin and jawline spots are common with hormonal acne. If they are deep or painful, a doctor can help.'})[z]||'These are patterns, not causes. Use the Trigger Lab to test what helps.';
+}
+function drawHeat(ok){
+  const cv=$('#heatCanvas'); if(!cv) return;
+  const W=cv.width,H=cv.height,g=cv.getContext('2d'),sx=W/200,sy=H/260; g.clearRect(0,0,W,H);
+  const act=ok.flatMap(s=>(s.lesions||[]).filter(l=>l[3]!=='m'));
+  const GW=100,GH=130,grid=new Float32Array(GW*GH),sig=3.2,R=Math.ceil(sig*3);
+  for(const l of act){const cx=(FX+FW*l[0])/2,cy=(FY+FH*l[1])/2;
+    for(let y=Math.max(0,Math.floor(cy-R));y<=Math.min(GH-1,Math.ceil(cy+R));y++)for(let x=Math.max(0,Math.floor(cx-R));x<=Math.min(GW-1,Math.ceil(cx+R));x++){
+      const d=(x-cx)**2+(y-cy)**2;grid[y*GW+x]+=Math.exp(-d/(2*sig*sig));}}
+  let mx=0;for(const v of grid)if(v>mx)mx=v;if(!mx)return;
+  const light=THEME==='light',img=g.createImageData(GW,GH);
+  for(let i=0;i<grid.length;i++){const t=Math.pow(grid[i]/mx,.75);if(t<0.04)continue;
+    const [r,gg,b]=light?[190-t*60,24+t*0,93-t*20]:[255,95+t*130,168+t*62];
+    img.data[i*4]=r;img.data[i*4+1]=gg;img.data[i*4+2]=b;img.data[i*4+3]=Math.round(255*Math.min(1,t*1.05));}
+  const tmp=document.createElement('canvas');tmp.width=GW;tmp.height=GH;tmp.getContext('2d').putImageData(img,0,0);
+  g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';g.filter='blur(6px)';g.drawImage(tmp,0,0,W,H);g.filter='none';
+}
+
+/* ---------- routine celebration ---------- */
+function confetti(){
+  if(reduceMotion())return; let cv=$('#confetti'); if(!cv){cv=document.createElement('canvas');cv.id='confetti';document.body.appendChild(cv);}
+  const dpr=window.devicePixelRatio||1,W=innerWidth,H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);
+  const cols=['#8b6cff','#ff5fa8','#22d3ee','#fbbf24','#34d399','#ffffff'],P=[];
+  for(let i=0;i<160;i++){const side=i%2;P.push({x:side?W*0.85:W*0.15,y:H*0.75,vx:(side?-1:1)*(3+Math.random()*7),vy:-(9+Math.random()*9),s:5+Math.random()*7,r:Math.random()*6.3,vr:(Math.random()-.5)*.35,c:cols[i%cols.length],o:1,round:Math.random()<.35});}
+  const t0=performance.now();
+  const step=n=>{const dt=Math.min(2,(n-(step.l||n))/16.7);step.l=n;g.clearRect(0,0,W,H);let alive=0;
+    for(const p of P){p.vy+=0.32*dt;p.vx*=Math.pow(.985,dt);p.x+=p.vx*dt;p.y+=p.vy*dt;p.r+=p.vr*dt;if(n-t0>1400)p.o-=0.025*dt;if(p.o<=0||p.y>H+20)continue;alive++;
+      g.save();g.globalAlpha=Math.max(0,p.o);g.translate(p.x,p.y);g.rotate(p.r);g.fillStyle=p.c;
+      if(p.round){g.beginPath();g.arc(0,0,p.s/2,0,6.283);g.fill();}else g.fillRect(-p.s/2,-p.s/4,p.s,p.s/2);g.restore();}
+    if(alive&&n-t0<4000)requestAnimationFrame(step);else{g.clearRect(0,0,W,H);cv.remove();}};
+  requestAnimationFrame(step);
 }
 
 /* ---------- diary ---------- */
@@ -3296,7 +3367,12 @@ const ACT={
   rvSubmit:async()=>{try{await api('/api/review',{detected:rv.dets.length,false_pos:rv.dets.filter(d=>d.fp).length,missed:rv.missed.length});toast('Review saved. See Insights for accuracy.');$('#rvmodal').style.display='none';rv=null;}catch(e){toast(e.message);}},
   print:()=>window.print(),
   groc:async a=>{try{await api('/api/profile',{grocery:{[a.dataset.k]:a.checked}});me.profile.grocery={...me.profile.grocery,[a.dataset.k]:a.checked};}catch(e){toast(e.message);}},
-  routineTick:async a=>{try{await api('/api/diary',{day:a.dataset.day||todayStr(),patch:{routine:{[a.dataset.k]:a.checked}}});}catch(e){toast(e.message);}},
+  routineTick:async a=>{try{await api('/api/diary',{day:a.dataset.day||todayStr(),patch:{routine:{[a.dataset.k]:a.checked}}});
+    const row=a.closest('.checkrow');if(row&&a.checked){row.classList.remove('done');void row.offsetWidth;row.classList.add('done');}
+    const box=a.closest('.card'),all=box?[...box.querySelectorAll('[data-act=routineTick]')]:[];
+    if(a.checked&&all.length&&all.every(c=>c.checked)){confetti();toast('Routine complete for today. Nice work!');}
+    const sn=$('#streakN');if(sn)api('/api/home').then(d=>{if(String(d.routine_streak)!==sn.textContent){sn.dataset.count=d.routine_streak;sn.textContent=d.routine_streak;fx(sn.parentNode);}}).catch(()=>{});
+  }catch(e){a.checked=!a.checked;toast(e.message);}},
   cmpChange:()=>renderCompare(),
   delScan:async a=>{if(!confirm('Delete this scan?'))return;await api('/api/delete',{kind:'scan',id:+a.dataset.id});route();},
   diaryDay:a=>{diaryDay=a.value||todayStr();route();},
