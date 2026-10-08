@@ -67,6 +67,10 @@ Each result has an **evidence level**:
 
 ## How it works
 
+Open `how_it_works.html` in a browser for an interactive 3D model of the
+pipeline (needs an internet connection to load the 3D library). On a Mac:
+`open how_it_works.html`
+
 | File | Job |
 | --- | --- |
 | `dna_analyzer.py` | Command-line entry point |

@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0">
+<title>DNA Analyzer in 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a 3D pipeline stage on the left, a reading/try-it rail on the right; stacks on phones. */
+:root {
+  --bg: #eef2f1; --surface: #ffffff; --sunk: #e4eae8; --fg: #152120; --muted: #586866;
+  --line: #d3dcda; --accent: #0d7882; --accent-soft: #d5ecee; --warn: #b9480f; --warn-soft: #fbe6d9;
+  --ok: #23804f; --base-a: #2e9e5b; --base-c: #2f6fd6; --base-g: #d99a12; --base-t: #d14343;
+  --scene: #eef2f1; --rung-dim: #b8c4c2;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "Figtree", "Helvetica Neue", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c1112; --surface: #141b1c; --sunk: #0f1516; --fg: #e3ebea; --muted: #90a19f;
+    --line: #243031; --accent: #3cc3cc; --accent-soft: #123236; --warn: #f08a4b; --warn-soft: #3a2316;
+    --ok: #4fcb8a; --base-a: #46c27a; --base-c: #5b93f0; --base-g: #f0b53a; --base-t: #f06464;
+    --scene: #0c1112; --rung-dim: #2c3a3b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c1112; --surface: #141b1c; --sunk: #0f1516; --fg: #e3ebea; --muted: #90a19f;
+  --line: #243031; --accent: #3cc3cc; --accent-soft: #123236; --warn: #f08a4b; --warn-soft: #3a2316;
+  --ok: #4fcb8a; --base-a: #46c27a; --base-c: #5b93f0; --base-g: #f0b53a; --base-t: #f06464;
+  --scene: #0c1112; --rung-dim: #2c3a3b; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--font-body); }
+.wrap { max-width: 1320px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 40px; display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 20px; }
+h1 { font: 700 clamp(1.5rem, 3.2vw, 2.1rem)/1.1 var(--font-display); margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 62ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font: 12px var(--font-mono); color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+@media (max-width: 960px) { .main { grid-template-columns: minmax(0, 1fr); } }
+
+.stage { position: relative; background: var(--scene); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+         height: clamp(400px, 60vh, 600px); }
+@media (max-width: 640px) { .stage { height: 460px; } }
+.stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.stage canvas:active { cursor: grabbing; }
+.labels { position: absolute; inset: 0; pointer-events: none; }
+.slabel { position: absolute; transform: translate(-50%, -100%); pointer-events: auto; border: 1px solid var(--line);
+          background: var(--surface); color: var(--fg); border-radius: 999px; padding: 4px 10px 4px 4px; font: 600 12px var(--font-body);
+          display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; transition: border-color .2s, background .2s; }
+.slabel b { font: 600 11px var(--font-mono); width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+            background: var(--sunk); color: var(--muted); }
+.slabel:hover, .slabel:focus-visible { border-color: var(--accent); outline: none; }
+.slabel.on { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.slabel.on b { background: var(--surface); color: var(--accent); }
+.plabel { position: absolute; transform: translate(-50%, -140%); font: 600 11px var(--font-mono); background: var(--fg); color: var(--bg);
+          padding: 2px 7px; border-radius: 6px; white-space: nowrap; pointer-events: none; }
+@media (max-width: 640px) { .slabel span { display: none; } .slabel { padding: 4px; } }
+
+.toolbar { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; pointer-events: none; }
+.toolbar > * { pointer-events: auto; }
+.hint { margin-left: auto; font-size: 12px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); padding: 4px 10px; border-radius: 999px; }
+@media (max-width: 640px) { .hint { display: none; } }
+button.btn { font: 600 13px var(--font-body); color: var(--fg); background: var(--surface); border: 1px solid var(--line);
+             border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+button.btn:hover { border-color: var(--accent); }
+button.btn:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+
+.rail { display: grid; gap: 16px; min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
+.eyebrow { font: 600 11px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.panel h2 { font: 700 1.3rem/1.15 var(--font-display); margin: 0; text-wrap: balance; }
+.panel p { margin: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 12px var(--font-mono); background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; margin: 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
+pre.code { margin: 0; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font: 12px/1.5 var(--font-mono);
+           overflow-x: auto; color: var(--fg); }
+.nav { display: flex; justify-content: space-between; gap: 8px; }
+
+form.try { display: grid; gap: 10px; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 8px; }
+label.f { display: grid; gap: 4px; font-size: 12px; color: var(--muted); min-width: 0; }
+select, input[type=text] { font: 14px var(--font-body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+                           padding: 8px 10px; width: 100%; min-width: 0; }
+input[type=text] { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .1em; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+.presets button { font: 12px var(--font-mono); background: var(--sunk); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+.presets button:hover { border-color: var(--accent); }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+ol.trace { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+ol.trace li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; font-size: 13px; align-items: start; }
+ol.trace .mk { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font: 600 11px var(--font-mono);
+               background: var(--sunk); color: var(--muted); }
+ol.trace .ok .mk { background: var(--accent-soft); color: var(--accent); }
+ol.trace .flip .mk { background: var(--accent); color: var(--surface); }
+ol.trace .stop .mk { background: var(--warn-soft); color: var(--warn); }
+ol.trace .skip { opacity: .45; }
+ol.trace small { display: block; color: var(--muted); }
+.result { border-left: 3px solid var(--accent); padding: 8px 12px; background: var(--sunk); border-radius: 0 8px 8px 0; font-size: 14px; }
+.result.warn { border-left-color: var(--warn); }
+.badge { font: 600 11px var(--font-mono); border: 1px solid currentColor; border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
+.ev-strong { color: var(--ok); } .ev-moderate { color: var(--base-g); } .ev-weak { color: var(--muted); }
+.note { font-size: 12px; color: var(--muted); }
+.noscript { padding: 20px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div style="display:grid;gap:6px;min-width:0">
+      <h1>How the DNA Analyzer works</h1>
+      <p class="lede">Data rides the helix through each stage of <code>dna_analyzer.py</code>. Click a stage to read what it does, or send your own variant through below.</p>
+    </div>
+    <div class="legend" aria-label="Base colours">
+      <span><i style="background:var(--base-a)"></i>A</span><span><i style="background:var(--base-c)"></i>C</span>
+      <span><i style="background:var(--base-g)"></i>G</span><span><i style="background:var(--base-t)"></i>T</span>
+      <span><i style="background:var(--rung-dim)"></i>filtered out</span><span><i style="background:var(--warn)"></i>stopped</span>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="stage" id="stage">
+      <canvas id="c" aria-label="3D model of the analyzer pipeline. Drag to rotate, scroll to zoom."></canvas>
+      <div class="labels" id="labels"></div>
+      <div class="toolbar">
+        <button class="btn" id="play" type="button">Pause</button>
+        <button class="btn" id="overview" type="button">Overview</button>
+        <span class="hint">Drag to rotate · scroll or pinch to zoom</span>
+      </div>
+    </div>
+
+    <div class="rail">
+      <section class="panel" id="detail" aria-live="polite"></section>
+
+      <section class="panel">
+        <div class="eyebrow">Try a variant</div>
+        <h2>Send one genotype through</h2>
+        <form class="try" id="tryForm">
+          <div class="row">
+            <label class="f" for="snp">Variant
+              <select id="snp"></select>
+            </label>
+            <label class="f" for="geno">Genotype
+              <input type="text" id="geno" maxlength="2" value="TC" autocomplete="off" spellcheck="false">
+            </label>
+          </div>
+          <div class="presets" id="presets"></div>
+          <label class="check" for="sens"><input type="checkbox" id="sens"> <span>Include sensitive medical results<br><small class="note">same as <code>--include-sensitive</code></small></span></label>
+          <button class="btn primary" type="submit">Run it through the model</button>
+        </form>
+        <ol class="trace" id="trace"></ol>
+        <div id="outcome"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const SNPS = [{"rsid":"rs4988235","gene":"MCM6 / LCT","trait":"Lactose tolerance","category":"Nutrition","ref":"G","alt":"A","effect":"A","evidence":"strong","sensitive":false,"note":"This variant explains lactase persistence mainly in people of European ancestry; other populations carry different variants that this marker does not test.","results":["No copies of the lactase-persistence allele. Lactase production probably declines in adulthood, so lactose intolerance is likely.","One copy of the lactase-persistence allele. The effect is dominant, so you are likely able to digest lactose as an adult.","Two copies of the lactase-persistence allele. You are likely able to digest lactose as an adult."]},{"rsid":"rs1801133","gene":"MTHFR","trait":"Folate metabolism (C677T)","category":"Nutrition","ref":"G","alt":"A","effect":"A","evidence":"strong","sensitive":false,"note":"The effect on the enzyme is well established; claims that it causes most other health problems are not supported.","results":["CC (677CC): typical MTHFR enzyme activity.","CT (677CT): modestly reduced enzyme activity (about 65% of typical). Usually no practical effect.","TT (677TT): enzyme activity about 30% of typical. Linked to higher homocysteine, mainly when folate intake is low; adequate folate usually brings levels back to normal."]},{"rsid":"rs1801131","gene":"MTHFR","trait":"Folate metabolism (A1298C)","category":"Nutrition","ref":"T","alt":"G","effect":"G","evidence":"moderate","sensitive":false,"note":"","results":["AA (1298AA): typical MTHFR enzyme activity.","AC (1298AC): little or no measurable effect on its own.","CC (1298CC): mildly reduced enzyme activity, smaller than the C677T effect."]},{"rsid":"rs762551","gene":"CYP1A2","trait":"Caffeine metabolism","category":"Nutrition","ref":"A","alt":"C","effect":"A","evidence":"moderate","sensitive":false,"note":"Smoking, medication and other genes also change caffeine clearance.","results":["CC: slower caffeine metaboliser.","AC: slower caffeine metaboliser.","AA: fast caffeine metaboliser (the enzyme is more inducible, especially in smokers)."]},{"rsid":"rs601338","gene":"FUT2","trait":"Secretor status (vitamin B12, norovirus)","category":"Nutrition","ref":"G","alt":"A","effect":"A","evidence":"strong","sensitive":false,"note":"This is the main non-secretor variant in European and African populations; East Asian populations mostly carry a different one.","results":["Secretor: blood-group antigens are released into saliva and gut.","Secretor (one non-secretor copy, which is recessive).","Non-secretor: blood-group antigens are not released into body fluids. Linked to strong resistance to common norovirus strains and to higher vitamin B12 levels."]},{"rsid":"rs671","gene":"ALDH2","trait":"Alcohol flush reaction","category":"Alcohol","ref":"G","alt":"A","effect":"A","evidence":"strong","sensitive":false,"note":"Common in East Asian populations, rare elsewhere.","results":["Typical ALDH2 activity; no genetic alcohol flush from this variant.","One copy of ALDH2*2: much lower enzyme activity, so facial flushing after alcohol is likely. In carriers, drinking is linked to a markedly higher risk of oesophageal cancer.","Two copies of ALDH2*2: almost no enzyme activity; strong flushing and very poor alcohol tolerance."]},{"rsid":"rs1229984","gene":"ADH1B","trait":"Alcohol metabolism speed","category":"Alcohol","ref":"C","alt":"T","effect":"T","evidence":"strong","sensitive":false,"note":"","results":["Typical ADH1B activity.","One copy of the fast ADH1B*2 allele: alcohol turns into acetaldehyde faster. Linked to a lower risk of alcohol dependence.","Two copies of the fast ADH1B*2 allele: alcohol turns into acetaldehyde much faster. Linked to a lower risk of alcohol dependence."]},{"rsid":"rs1815739","gene":"ACTN3","trait":"Muscle fibre type (R577X)","category":"Fitness","ref":"C","alt":"T","effect":"T","evidence":"moderate","sensitive":false,"note":"The effect matters at elite level; training matters far more for everyone else.","results":["RR: makes alpha-actinin-3 in fast-twitch muscle. Slightly more common among elite sprint and power athletes.","RX: makes alpha-actinin-3 in fast-twitch muscle.","XX: makes no alpha-actinin-3. Common (about 18% of Europeans) and harmless; slightly less common among elite sprinters."]},{"rsid":"rs4680","gene":"COMT","trait":"Dopamine breakdown (Val158Met)","category":"Fitness","ref":"G","alt":"A","effect":"A","evidence":"weak","sensitive":false,"note":"The enzyme effect is real; links to personality, stress or pain are inconsistent across studies.","results":["Val/Val: higher COMT activity, faster dopamine breakdown.","Val/Met: intermediate COMT activity.","Met/Met: COMT activity roughly 3-4 times lower, slower dopamine breakdown."]},{"rsid":"rs12913832","gene":"HERC2 / OCA2","trait":"Eye colour","category":"Traits","ref":"A","alt":"G","effect":"G","evidence":"strong","sensitive":false,"note":"The strongest single eye-colour marker, but other genes also contribute.","results":["AA: brown eyes most likely.","AG: brown or green/hazel eyes most likely; blue is less likely.","GG: blue or other light eyes most likely."]},{"rsid":"rs17822931","gene":"ABCC11","trait":"Earwax type and body odour","category":"Traits","ref":"C","alt":"T","effect":"T","evidence":"strong","sensitive":false,"note":"","results":["Wet earwax type.","Wet earwax type (the dry type is recessive).","Dry earwax type; also linked to less underarm odour."]},{"rsid":"rs72921001","gene":"OR6A2 region","trait":"Cilantro (coriander) tastes soapy","category":"Traits","ref":"C","alt":"A","effect":"A","evidence":"weak","sensitive":false,"note":"A real but small effect: most people with this variant still like cilantro.","results":["Typical odds of finding cilantro soapy.","Slightly higher odds of finding cilantro soapy.","Higher odds of finding cilantro soapy."]},{"rsid":"rs2187668","gene":"HLA-DQA1 (DQ2.5)","trait":"Coeliac disease genetic risk","category":"Health","ref":"C","alt":"T","effect":"T","evidence":"strong","sensitive":false,"note":"Roughly 30% of people of European ancestry carry DQ2/DQ8, but only about 1% develop coeliac disease.","results":["Does not carry this HLA-DQ2.5 marker. HLA-DQ8 and other types are not tested here, so coeliac disease is not ruled out.","Carries one copy of the HLA-DQ2.5 marker, the main genetic risk factor for coeliac disease. Many carriers never develop it.","Carries two copies of the HLA-DQ2.5 marker, the main genetic risk factor for coeliac disease. Many carriers never develop it."]},{"rsid":"rs7903146","gene":"TCF7L2","trait":"Type 2 diabetes risk","category":"Health","ref":"C","alt":"T","effect":"T","evidence":"strong","sensitive":false,"note":"The strongest common type 2 diabetes variant, but weight, activity and diet matter much more.","results":["CC: typical genetic risk from this variant.","CT: about 1.4 times the odds of type 2 diabetes compared with CC.","TT: about 2 times the odds of type 2 diabetes compared with CC."]},{"rsid":"rs10757274","gene":"CDKN2B-AS1 (9p21)","trait":"Coronary artery disease risk","category":"Health","ref":"A","alt":"G","effect":"G","evidence":"strong","sensitive":false,"note":"Blood pressure, cholesterol, smoking and activity matter much more.","results":["AA: typical genetic risk from this region.","AG: about 1.2-1.3 times the odds of coronary artery disease compared with AA.","GG: about 1.5-1.6 times the odds of coronary artery disease compared with AA."]},{"rsid":"rs10455872","gene":"LPA","trait":"Lipoprotein(a) level","category":"Health","ref":"A","alt":"G","effect":"G","evidence":"strong","sensitive":false,"note":"Lp(a) is mostly set by genes; many other LPA variants also affect it.","results":["No copies of this high-Lp(a) marker.","One copy: linked to raised lipoprotein(a) and higher heart disease risk. A one-off Lp(a) blood test gives the real number.","Two copies: linked to raised lipoprotein(a) and higher heart disease risk. A one-off Lp(a) blood test gives the real number."]},{"rsid":"rs6025","gene":"F5","trait":"Factor V Leiden (blood clots)","category":"Medical","ref":"C","alt":"T","effect":"T","evidence":"strong","sensitive":true,"note":"Risk rises further with oestrogen-containing medication, surgery and long periods of immobility.","results":["Factor V Leiden not detected.","One copy of Factor V Leiden: about 3-8 times the typical risk of venous blood clots. Worth confirming with a clinical test.","Two copies of Factor V Leiden: much higher risk of venous blood clots. Please confirm with a clinical test and talk to a doctor."]},{"rsid":"rs1799963","gene":"F2","trait":"Prothrombin G20210A (blood clots)","category":"Medical","ref":"G","alt":"A","effect":"A","evidence":"strong","sensitive":true,"note":"","results":["Prothrombin G20210A not detected.","One copy of prothrombin G20210A: about 2-3 times the typical risk of venous blood clots. Worth confirming with a clinical test.","Two copies of prothrombin G20210A: much higher risk of venous blood clots. Please confirm with a clinical test and talk to a doctor."]},{"rsid":"rs1800562","gene":"HFE","trait":"Hereditary haemochromatosis (C282Y)","category":"Medical","ref":"G","alt":"A","effect":"A","evidence":"strong","sensitive":true,"note":"","results":["HFE C282Y not detected.","Carrier of one HFE C282Y copy. Carriers rarely develop iron overload.","Two copies of HFE C282Y, the main cause of hereditary haemochromatosis. Many (not all) people with this develop iron overload; ferritin and transferrin saturation blood tests can check."]}];
+
+// ------------------------------------------------------------------ stages
+const STAGES = [
+  { x: -25, short: "Raw file", title: "Raw DNA file", file: "your_dna.zip",
+    fn: ["read_lines()"],
+    text: "Your download from 23andMe, AncestryDNA, MyHeritage or FamilyTreeDNA. It holds about 600,000 rows, one per marker. Zip and gzip files are opened directly, and the biggest file inside a zip is used.",
+    facts: [["Rows", "~600,000"], ["Formats", "tab or CSV"], ["Opens", ".txt .csv .zip .gz"]],
+    code: "# rsid       chr  position   genotype\nrs4988235    2    136608646  AG\nrs671        12   112241766  GG\nrs10455872   6    161010118  --" },
+  { x: -15, short: "Parser", title: "Parser keeps 21 markers", file: "dna_parser.py",
+    fn: ["parse_raw_dna(path, wanted)"],
+    text: "Every row is counted for the call rate, but only the 21 markers the analyzer needs are kept. That's why most beads drop off here. Rows the chip couldn't read (\"--\" or \"00\") are set aside as no-calls.",
+    facts: [["Kept", "21 of ~600,000"], ["No-calls", "--  00  0"], ["Speed", "640k rows ≈ 1 s"]],
+    code: "if genotype in NO_CALLS:\n    result.no_calls += 1\n    result.no_call_rsids.add(rsid)\nelif rsid in wanted:\n    result.genotypes[rsid] = genotype" },
+  { x: -5, short: "Strand check", title: "Strand check flips the other side", file: "analyzer.py",
+    fn: ["orient(genotype, ref, alt)"],
+    text: "DNA has two strands. If a genotype doesn't match the expected letters, it is read as the opposite strand: A↔T and C↔G are swapped and checked again. Variants with A/T or C/G letters were left out of the database, so the flip is never ambiguous.",
+    facts: [["Expected", "G / A  (rs671)"], ["Seen", "T C"], ["Flipped", "A G  ✓"]],
+    code: "COMPLEMENT = str.maketrans(\"ACGT\", \"TGCA\")\nflipped = [a.translate(COMPLEMENT) for a in alleles]\nif set(flipped) <= {ref, alt}:\n    return flipped, True" },
+  { x: 5, short: "Lookup", title: "Database counts the effect allele", file: "snp_database.py",
+    fn: ["analyze_snp(snp, dna)"],
+    text: "Each variant has one effect allele. The analyzer counts how many copies you have (0, 1 or 2) and picks the matching explanation. The beads split into three lanes here, one per copy count.",
+    facts: [["Variants", "19 + APOE"], ["Copies", "0 · 1 · 2"], ["Evidence", "strong · moderate · weak"]],
+    code: "copies = alleles.count(snp[\"effect\"])\nresult = snp[\"results\"][copies]" },
+  { x: 15, short: "Analyzer", title: "Analyzer applies APOE and privacy", file: "analyzer.py",
+    fn: ["analyze_apoe(dna)", "analyze(dna, include_sensitive)"],
+    text: "APOE type is worked out from two markers together (rs429358 + rs7412). Four medical results (APOE, Factor V Leiden, prothrombin, HFE) stop at this gate unless you add --include-sensitive. Everything is sorted into report sections.",
+    facts: [["APOE", "e2 · e3 · e4"], ["Hidden by default", "4 medical"], ["Statuses", "found · no call · not tested"]],
+    code: "if not include_sensitive:\n    findings = [f for f in findings\n                if not f.sensitive]" },
+  { x: 25, short: "Reports", title: "Reports in three formats", file: "report.py",
+    fn: ["text_report()", "html_report()", "json_report()"],
+    text: "The text report prints in the terminal. Add --html for a web page you can open in a browser, or --json for data other programs can read. Nothing leaves your computer.",
+    facts: [["Terminal", "always"], ["HTML", "--html report.html"], ["JSON", "--json report.json"]],
+    code: "python3 dna_analyzer.py my_dna.zip \\\n    --html report.html --json report.json" },
+];
+
+// ------------------------------------------------------------------ helpers
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// Same logic as analyzer.orient() in Python.
+const COMP = { A: "T", T: "A", C: "G", G: "C" };
+function orient(g, ref, alt) {
+  const a = g.split("");
+  if (a.length !== 2) return null;
+  const ok = x => x === ref || x === alt;
+  if (a.every(ok)) return { alleles: a, flipped: false };
+  const f = a.map(x => COMP[x]);
+  if (f.every(ok)) return { alleles: f, flipped: true };
+  return null;
+}
+const NO_CALLS = new Set(["", "-", "--", "0", "00", "NC", "??"]);
+
+// ------------------------------------------------------------------ stage detail panel
+let current = 0;
+function showStage(i, fly = true) {
+  current = i;
+  const s = STAGES[i];
+  $("detail").innerHTML = `
+    <div class="eyebrow">Stage ${i + 1} of ${STAGES.length} · ${esc(s.file)}</div>
+    <h2>${esc(s.title)}</h2>
+    <div class="chips">${s.fn.map(f => `<span class="chip">${esc(f)}</span>`).join("")}</div>
+    <p>${esc(s.text)}</p>
+    <dl class="facts">${s.facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+    <pre class="code">${esc(s.code)}</pre>
+    <div class="nav">
+      <button class="btn" type="button" id="prev" ${i === 0 ? "disabled" : ""}>Previous</button>
+      <button class="btn" type="button" id="next" ${i === STAGES.length - 1 ? "disabled" : ""}>Next stage</button>
+    </div>`;
+  $("prev").onclick = () => showStage(i - 1);
+  $("next").onclick = () => showStage(i + 1);
+  document.querySelectorAll(".slabel").forEach((el, k) => el.classList.toggle("on", k === i));
+  if (scene) {
+    rings.forEach((r, k) => { r.material.color.set(k === i ? css("--accent") : css("--muted")); r.scale.setScalar(k === i ? 1.12 : 1); });
+    if (fly) flyTo(i);
+  }
+}
+
+// ------------------------------------------------------------------ try-it panel
+const snpSel = $("snp");
+SNPS.forEach((s, i) => {
+  const o = document.createElement("option");
+  o.value = i; o.textContent = `${s.trait} (${s.rsid})${s.sensitive ? " · sensitive" : ""}`;
+  snpSel.appendChild(o);
+});
+snpSel.value = SNPS.findIndex(s => s.rsid === "rs671");
+
+function presetsFor(s) {
+  const c = x => COMP[x];
+  return [
+    [s.ref + s.alt, "forward"],
+    [c(s.ref) + c(s.alt), "other strand"],
+    [s.effect + s.effect, "2 copies"],
+    ["--", "no call"],
+    [s.ref + COMP[s.alt], "impossible"],
+  ].filter((p, i, arr) => arr.findIndex(q => q[0] === p[0]) === i);
+}
+function renderPresets() {
+  const s = SNPS[snpSel.value];
+  $("presets").innerHTML = "Examples: " + presetsFor(s).map(([g, why]) =>
+    `<button type="button" data-g="${g}" title="${why}">${g}</button>`).join("");
+  $("presets").querySelectorAll("button").forEach(b => b.onclick = () => { $("geno").value = b.dataset.g; run(); });
+}
+snpSel.onchange = () => { renderPresets(); run(); };
+$("sens").onchange = () => { if (gate) gate.visible = !$("sens").checked; run(); };
+$("tryForm").onsubmit = e => { e.preventDefault(); run(); };
+
+function trace(s, raw, includeSensitive) {
+  const g = raw.trim().toUpperCase();
+  const steps = [];
+  let stopAt = null, outcome = null, color = "--accent";
+
+  if (NO_CALLS.has(g) || g.includes("-") || g.includes("0")) {
+    steps.push(["stop", "1", `Read ${s.rsid} = "${g || "--"}"`, "The chip couldn't read this marker."]);
+    steps.push(["stop", "2", "Set aside as a no-call", "Counted against the call rate; not analysed."]);
+    stopAt = 1; outcome = { warn: true, text: `<b>No call.</b> The report shows “${esc(s.trait)}: No call”.` };
+    color = "--rung-dim";
+  } else {
+    steps.push(["ok", "1", `Read ${s.rsid} = ${g}`, "Found in the raw file."]);
+    steps.push(["ok", "2", "Kept by the parser", `${s.rsid} is one of the 21 analysed markers.`]);
+    const o = orient(g, s.ref, s.alt);
+    if (!o) {
+      steps.push(["stop", "3", "Strand check failed", `Expected ${s.ref}/${s.alt}, or ${COMP[s.ref]}/${COMP[s.alt]} on the other strand.`]);
+      stopAt = 2; color = "--warn";
+      outcome = { warn: true, text: `<b>Unexpected genotype.</b> Expected alleles ${s.ref}/${s.alt} but found ${esc(g)}.` };
+    } else {
+      steps.push([o.flipped ? "flip" : "ok", "3", o.flipped ? `Other strand: ${g} → ${o.alleles.join("")}` : "Forward strand",
+                  o.flipped ? "A↔T and C↔G swapped to match the database." : `Letters match ${s.ref}/${s.alt}.`]);
+      const copies = o.alleles.filter(a => a === s.effect).length;
+      steps.push(["ok", "4", `${copies} ${copies === 1 ? "copy" : "copies"} of effect allele ${s.effect}`,
+                  `${s.gene} · <span class="badge ev-${s.evidence}">${s.evidence} evidence</span>`]);
+      if (s.sensitive && !includeSensitive) {
+        steps.push(["stop", "5", "Stopped at the privacy gate", "Sensitive medical result. Tick “Include sensitive” to show it."]);
+        stopAt = 4; color = "--warn";
+        outcome = { warn: true, text: "<b>Hidden.</b> The report says 1 sensitive result is hidden." };
+      } else {
+        steps.push(["ok", "5", `Filed under ${s.category}`, s.sensitive ? "Shown because --include-sensitive is on." : "Not sensitive, so always shown."]);
+        steps.push(["ok", "6", "Written to the report", "Text, plus HTML or JSON if asked."]);
+        stopAt = 5;
+        const genoShown = o.alleles.slice().sort().join("");
+        outcome = { warn: false, text: `<b>${esc(s.trait)}</b> · <span class="chip">${genoShown}</span><br>${esc(s.results[copies])}${s.note ? `<div class="note" style="margin-top:6px">${esc(s.note)}</div>` : ""}`,
+                    lane: copies, flipped: o.flipped };
+      }
+    }
+  }
+  // greyed-out later steps
+  const names = ["Read", "Parser", "Strand check", "Lookup", "Analyzer", "Report"];
+  for (let k = steps.length; k < 6; k++) steps.push(["skip", String(k + 1), names[k], "Not reached."]);
+  return { steps, stopAt, outcome, color };
+}
+
+function run() {
+  const s = SNPS[snpSel.value];
+  const t = trace(s, $("geno").value, $("sens").checked);
+  $("trace").innerHTML = t.steps.map(([cls, n, title, sub]) =>
+    `<li class="${cls}"><span class="mk">${cls === "flip" ? "↻" : cls === "stop" ? "×" : n}</span><div>${esc(title)}<small>${sub}</small></div></li>`).join("");
+  $("outcome").innerHTML = `<div class="result${t.outcome.warn ? " warn" : ""}">${t.outcome.text}</div>`;
+  launchMine(s, t);
+}
+
+// ------------------------------------------------------------------ 3D scene
+let scene, camera, renderer, controls, helix, rings = [], gate, slabs = [], packets = [], mine = null;
+let playing = !reduced, tween = null;
+
+function init() {
+  const canvas = $("c");
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(38, 1, 0.1, 400);
+  controls = new THREE.OrbitControls(camera, canvas);
+  controls.enableDamping = true; controls.dampingFactor = 0.08;
+  controls.minDistance = 8; controls.maxDistance = 140;
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x445555, 0.85));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(10, 20, 15); scene.add(sun);
+
+  pgeo = new THREE.SphereGeometry(0.22, 14, 10); v = new THREE.Vector3();
+  buildHelix(); buildStations(); buildPackets();
+  applyTheme();
+  resize();
+  new ResizeObserver(resize).observe($("stage"));
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+  new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  // Pre-roll so the very first frame already shows beads at every stage.
+  for (let i = 0; i < 240; i++) step(1 / 30);
+  overview(false);
+  requestAnimationFrame(loop);
+}
+
+const R = 2.3, X0 = -33, X1 = 31, PITCH = 7.5;
+function helixPoint(x, phase) {
+  const a = (x / PITCH) * Math.PI * 2 + phase;
+  return new THREE.Vector3(x, Math.cos(a) * R, Math.sin(a) * R);
+}
+let strandMats = [], rungMeshes = [];
+function buildHelix() {
+  helix = new THREE.Group();
+  [0, Math.PI].forEach(phase => {
+    const pts = []; for (let x = X0; x <= X1; x += 0.25) pts.push(helixPoint(x, phase));
+    const mat = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0.1 });
+    strandMats.push(mat);
+    helix.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 600, 0.16, 8, false), mat));
+  });
+  const geo = new THREE.CylinderGeometry(0.07, 0.07, R, 6);
+  const up = new THREE.Vector3(0, 1, 0);
+  const pairs = [["A", "T"], ["T", "A"], ["C", "G"], ["G", "C"]];
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let x = X0 + 0.4; x < X1; x += 0.8) {
+    const p1 = helixPoint(x, 0), p2 = helixPoint(x, Math.PI), mid = new THREE.Vector3(x, 0, 0);
+    const pair = pairs[Math.floor(rnd() * 4)];
+    [[p1, pair[0]], [p2, pair[1]]].forEach(([p, base]) => {
+      const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ roughness: 0.6 }));
+      m.position.copy(p).add(mid).multiplyScalar(0.5);
+      m.quaternion.setFromUnitVectors(up, mid.clone().sub(p).normalize());
+      m.userData.base = base;
+      rungMeshes.push(m); helix.add(m);
+    });
+  }
+  scene.add(helix);
+}
+
+function buildStations() {
+  STAGES.forEach((s, i) => {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(3.7, 0.09, 12, 80), new THREE.MeshBasicMaterial());
+    ring.rotation.y = Math.PI / 2; ring.position.x = s.x;
+    rings.push(ring); scene.add(ring);
+    const lab = document.createElement("button");
+    lab.type = "button"; lab.className = "slabel";
+    lab.innerHTML = `<b>${i + 1}</b><span>${s.short}</span>`;
+    lab.setAttribute("aria-label", `Stage ${i + 1}: ${s.short}`);
+    lab.onclick = () => showStage(i);
+    $("labels").appendChild(lab); s.el = lab;
+  });
+  // Privacy gate at the analyzer stage
+  gate = new THREE.Mesh(new THREE.CircleGeometry(3.4, 48), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }));
+  gate.rotation.y = Math.PI / 2; gate.position.x = STAGES[4].x + 1.2; scene.add(gate);
+  // Report slabs: text, HTML, JSON
+  ["text", "html", "json"].forEach((k, i) => {
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(0.25, 1.6, 2.4), new THREE.MeshStandardMaterial({ roughness: 0.4 }));
+    slab.position.set(29.5, (1 - i) * 2.1, 0); slabs.push(slab); scene.add(slab);
+  });
+}
+
+const PCOUNT = 170, SPEED = 4.2;
+let pgeo;
+function buildPackets() {
+  for (let i = 0; i < PCOUNT; i++) {
+    const m = new THREE.Mesh(pgeo, new THREE.MeshStandardMaterial({ transparent: true, roughness: 0.35 }));
+    scene.add(m);
+    const p = { m }; resetPacket(p, X0 + Math.random() * (X1 - X0 + 4)); packets.push(p);
+  }
+}
+const BASES = ["--base-a", "--base-c", "--base-g", "--base-t"];
+function resetPacket(p, x = X0) {
+  const r = Math.random();
+  p.kind = r < 0.58 ? "filtered" : r < 0.68 ? "nocall" : "kept";
+  p.flip = Math.random() < 0.35;
+  p.copies = Math.floor(Math.random() * 3);
+  p.sensitive = Math.random() < 0.18;
+  p.slab = Math.floor(Math.random() * 3);
+  const a = Math.random() * Math.PI * 2, rr = Math.random() * 1.5;
+  p.y = Math.cos(a) * rr; p.z = Math.sin(a) * rr; p.x = x; p.vy = 0; p.alpha = 1; p.dead = false; p.spin = 0;
+  p.base = BASES[Math.floor(Math.random() * 4)];
+  p.m.scale.setScalar(p.kind === "kept" ? 1 : 0.75);
+  colorPacket(p, p.base);
+}
+const pal = {};
+const col = t => pal[t] || (pal[t] = new THREE.Color(css(t)));
+function colorPacket(p, token) { if (p.token === token) return; p.token = token; p.m.material.color.copy(col(token)); }
+
+function stepPacket(p, dt) {
+  const S = STAGES.map(s => s.x);
+  if (p.dead) { // falling out
+    p.vy -= 18 * dt; p.y += p.vy * dt; p.alpha -= dt * 0.9;
+    if (p.alpha <= 0 || p.y < -14) resetPacket(p);
+  } else {
+    p.x += SPEED * dt;
+    if (p.x > S[1] && p.kind !== "kept") {
+      p.dead = true; p.vy = 1.5 + Math.random() * 2;
+      if (p.kind === "nocall") colorPacket(p, "--rung-dim"); else p.alpha = 0.6;
+    }
+    if (p.x > S[1] && p.kind === "kept") { p.y += (0 - p.y) * dt * 2; p.z += (0 - p.z) * dt * 2; }
+    if (p.x > S[2] && p.flip && p.spin === 0) { p.spin = 1; colorPacket(p, "--accent"); }
+    if (p.x > S[3]) { p.y += ((p.copies - 1) * 1.15 - p.y) * dt * 2.5; colorPacket(p, ["--base-c", "--base-g", "--base-t"][p.copies]); }
+    if (p.x > S[4] + 0.9 && p.sensitive && gate.visible) {
+      p.x = S[4] + 0.9; colorPacket(p, "--warn"); p.alpha -= dt * 0.8; if (p.alpha <= 0) resetPacket(p);
+    }
+    if (p.x > S[5]) { p.y += ((1 - p.slab) * 2.1 - p.y) * dt * 3; }
+    if (p.x > 29.3) resetPacket(p);
+  }
+  p.m.position.set(p.x, p.y, p.z);
+  p.m.material.opacity = Math.max(0, Math.min(1, p.alpha));
+  if (p.spin > 0 && p.spin < 7) { p.spin += dt * 9; p.m.scale.setScalar(1 + Math.sin(Math.min(p.spin, Math.PI)) * 0.6); }
+}
+
+// ---- the user's own packet
+const plabel = document.createElement("div"); plabel.className = "plabel"; plabel.hidden = true; $("labels").appendChild(plabel);
+function launchMine(s, t) {
+  if (!scene) return;
+  if (!mine) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.5, 24, 16), new THREE.MeshStandardMaterial({ roughness: 0.25, emissiveIntensity: 0.35 }));
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.05, 8, 40), new THREE.MeshBasicMaterial());
+    halo.rotation.y = Math.PI / 2; m.add(halo); scene.add(m);
+    mine = { m, halo };
+  }
+  const stopX = t.stopAt === 5 ? 29 : STAGES[t.stopAt].x + (t.stopAt === 4 ? 0.9 : 0.6);
+  Object.assign(mine, { x: X0, y: 0, stopX, lane: t.outcome.lane ?? 1, t, s, flipped: t.outcome.flipped, token: "--fg" });
+  mine.m.material.color.set(css(BASES[0])); mine.m.material.emissive.set(css(BASES[0]));
+  mine.halo.material.color.set(css("--fg"));
+  plabel.hidden = false;
+  if (!playing) togglePlay();
+}
+function stepMine(dt) {
+  if (!mine) return;
+  const S = STAGES.map(s => s.x);
+  if (mine.x < mine.stopX) mine.x = Math.min(mine.stopX, mine.x + SPEED * 1.6 * dt);
+  let token = "--base-g", label = mine.s.rsid + " " + ($("geno").value || "--").toUpperCase();
+  if (mine.x > S[1] && mine.t.stopAt === 1) token = "--rung-dim";
+  if (mine.x > S[2] && mine.flipped) token = "--accent";
+  if (mine.x > S[2] && mine.t.stopAt === 2) token = "--warn";
+  if (mine.x > S[3] && mine.t.stopAt >= 4) { mine.y += ((mine.lane - 1) * 1.15 - mine.y) * dt * 2.5; }
+  if (mine.x >= mine.stopX && mine.t.stopAt === 4) token = "--warn";
+  if (mine.x >= mine.stopX) label = mine.t.stopAt === 5 ? "in the report" : mine.t.stopAt === 4 ? "hidden" : mine.t.stopAt === 2 ? "unexpected" : "no call";
+  if (token !== mine.token) { mine.token = token; mine.m.material.color.set(css(token)); mine.m.material.emissive.set(css(token)); }
+  mine.halo.rotation.x += dt * 3;
+  mine.m.position.set(mine.x, mine.y, 0);
+  plabel.textContent = label;
+}
+
+// ---- camera
+function overview(animate = true) {
+  const aspect = camera.aspect || 1.6;
+  if (aspect < 1) {
+    // Narrow screens: look down the helix at an angle so it recedes into depth.
+    setView(new THREE.Vector3(-44, 36, 66), new THREE.Vector3(-4, -3, 0), animate);
+  } else {
+    // Wide screens: a three-quarter view that still fits all six stages.
+    const k = Math.max(1, 1.9 / aspect);
+    setView(new THREE.Vector3(-16 * k, 24 * k, 52 * k), new THREE.Vector3(1, -3, 0), animate);
+  }
+  document.querySelectorAll(".slabel").forEach(el => el.classList.remove("on"));
+  rings.forEach(r => { r.material.color.set(css("--muted")); r.scale.setScalar(1); });
+}
+function flyTo(i) {
+  const x = STAGES[i].x, d = camera.aspect < 0.9 ? 26 : 17;
+  setView(new THREE.Vector3(x - 6, 6, d), new THREE.Vector3(x, 0, 0), true);
+}
+function setView(pos, target, animate) {
+  if (!animate || reduced) { camera.position.copy(pos); controls.target.copy(target); controls.update(); tween = null; return; }
+  tween = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: target, k: 0 };
+}
+
+function applyTheme() {
+  for (const k in pal) delete pal[k];
+  scene.background = new THREE.Color(css("--scene"));
+  strandMats.forEach(m => m.color.set(css("--muted")));
+  rungMeshes.forEach(m => m.material.color.set(css("--base-" + m.userData.base.toLowerCase())));
+  gate.material.color.set(css("--warn"));
+  slabs.forEach(s => s.material.color.set(css("--fg")));
+  rings.forEach((r, k) => r.material.color.set(document.querySelector(".slabel.on") && k === current ? css("--accent") : css("--muted")));
+  packets.forEach(p => p.m.material.color.copy(col(p.token)));
+  if (mine) { mine.m.material.color.set(css(mine.token)); mine.m.material.emissive.set(css(mine.token)); mine.halo.material.color.set(css("--fg")); }
+}
+
+function resize() {
+  const el = $("stage"), w = el.clientWidth, h = el.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+
+function step(dt) {
+  if (playing) helix.rotation.x += dt * 0.35;
+  packets.forEach(p => stepPacket(p, dt));
+}
+
+let v;
+function placeLabels() {
+  const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
+  STAGES.forEach(s => {
+    v.set(s.x, 4.4, 0).project(camera);
+    const vis = v.z < 1 && Math.abs(v.x) < 1.15 && Math.abs(v.y) < 1.15;
+    s.el.style.visibility = vis ? "visible" : "hidden";
+    s.el.style.left = ((v.x + 1) / 2 * w) + "px"; s.el.style.top = ((1 - v.y) / 2 * h) + "px";
+  });
+  if (mine) {
+    v.set(mine.x, mine.y + 0.6, 0).project(camera);
+    plabel.style.left = ((v.x + 1) / 2 * w) + "px"; plabel.style.top = ((1 - v.y) / 2 * h) + "px";
+  }
+}
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (playing) { step(dt); stepMine(dt); }
+  if (tween) {
+    tween.k = Math.min(1, tween.k + dt * 1.6);
+    const e = tween.k < .5 ? 2 * tween.k * tween.k : 1 - Math.pow(-2 * tween.k + 2, 2) / 2;
+    camera.position.lerpVectors(tween.p0, tween.p1, e); controls.target.lerpVectors(tween.t0, tween.t1, e);
+    if (tween.k >= 1) tween = null;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  placeLabels();
+  requestAnimationFrame(loop);
+}
+
+function togglePlay() { playing = !playing; $("play").textContent = playing ? "Pause" : "Play"; }
+$("play").onclick = togglePlay;
+$("overview").onclick = () => overview(true);
+$("play").textContent = playing ? "Pause" : "Play";
+
+// ------------------------------------------------------------------ boot
+if (window.THREE && THREE.OrbitControls) {
+  init();
+  showStage(0, false);
+  renderPresets();
+  run();
+  if (reduced && mine) { mine.x = mine.stopX; stepMine(0); }
+} else {
+  $("stage").innerHTML = '<p class="noscript">The 3D view needs WebGL and could not load. The stage notes and the variant tester still work.</p>';
+  showStage(0, false); renderPresets(); run();
+}
+</script>
+
+</body>
+</html>
