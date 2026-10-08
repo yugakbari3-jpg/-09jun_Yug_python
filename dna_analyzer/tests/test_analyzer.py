@@ -1,6 +1,8 @@
 """Run with:  python -m unittest discover -s tests   (from the dna_analyzer folder)"""
 
+import contextlib
 import gzip
+import io
 import json
 import sys
 import tempfile
@@ -167,10 +169,12 @@ class ReportTests(unittest.TestCase):
     def test_cli_writes_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             html_path, json_path = Path(tmp, "r.html"), Path(tmp, "r.json")
-            code = main([str(SAMPLE), "--html", str(html_path), "--json", str(json_path)])
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                code = main([str(SAMPLE), "--html", str(html_path), "--json", str(json_path)])
+                missing = main([str(SAMPLE) + ".missing"])
             self.assertEqual(code, 0)
             self.assertTrue(html_path.exists() and json_path.exists())
-        self.assertEqual(main([str(SAMPLE) + ".missing"]), 1)
+        self.assertEqual(missing, 1)
 
 
 if __name__ == "__main__":
