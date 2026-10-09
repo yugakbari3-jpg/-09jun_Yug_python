@@ -145,6 +145,29 @@ def load_any(path_or_bytes, filename: str = "") -> CTVolume:
 # --------------------------------------------------------------------------- #
 #  Sybil preprocessing
 # --------------------------------------------------------------------------- #
+SLICE_THICKNESS_FILTER = 2.5  # mm, from the reference checkpoints' args
+
+
+def quality_checks(ct: CTVolume) -> list[str]:
+    """Warnings for scans that differ from what the model was trained on."""
+    w = []
+    sz, sy, sx = ct.spacing
+    if sz > SLICE_THICKNESS_FILTER + 1e-3:
+        w.append(f"Slice spacing is {sz:.2g} mm; the model was trained on series of at most "
+                 f"{SLICE_THICKNESS_FILTER} mm, so results may be less reliable.")
+    cover = ct.hu.shape[0] * sz
+    if cover < 200:
+        w.append(f"Scan covers only {cover:.0f} mm craniocaudally; the whole chest is usually 250-350 mm.")
+    if cover > NUM_IMAGES * TARGET_SPACING[0] + 1:
+        w.append(f"Scan covers {cover:.0f} mm; only the central {NUM_IMAGES * TARGET_SPACING[0]:.0f} mm are analysed.")
+    lo, hi = np.percentile(ct.hu, [1, 99])
+    if lo > -700 or hi < 0:
+        w.append("Intensity range does not look like a chest CT in Hounsfield units.")
+    if max(sy * ct.hu.shape[1], sx * ct.hu.shape[2]) < 250:
+        w.append("Field of view is narrow (<250 mm); parts of the lungs may be cut off.")
+    return w
+
+
 def to_model_coords(ct: CTVolume, z_mm: float, y_mm: float, x_mm: float) -> tuple[int, int, int]:
     """Map a physical point (z from first slice, y/x from image centre, mm) to
     voxel indices in the 200 x 256 x 256 model input."""
