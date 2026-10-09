@@ -18,7 +18,7 @@
   const S = {
     status: null, cases: [], caseId: null, vol: null, valid: [0, D - 1],
     cur: { z: 100, y: 128, x: 128 }, attn: null, result: null,
-    win: "model", ov: true, op: 0.7, gt: true, nModels: 1, poll: null, active: "axial", hover: null,
+    win: "model", ov: true, op: 0.7, gt: true, nModels: 1, tta: 1, patients: {}, clinical: null, poll: null, active: "axial", hover: null,
   };
 
   // ------------------------------------------------------------------ utils
@@ -257,6 +257,7 @@
     const b = e.target.closest("button"); if (!b) return;
     seg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
     if (seg.id === "ens") { S.nModels = +b.dataset.v; updateEta(); }
+    if (seg.id === "tta") { S.tta = +b.dataset.v; updateEta(); }
   }));
   $("#p-mm").oninput = e => $("#o-mm").textContent = `${e.target.value} mm`;
   $("#p-lvl").oninput = e => { const v = +e.target.value; $("#o-lvl").textContent = v < 0.34 ? "upper" : v < 0.67 ? "middle" : "lower"; };
@@ -335,7 +336,7 @@
   $("#run").onclick = async () => {
     if (!S.caseId) return toast("Load or generate a CT first");
     try {
-      await api(`/api/cases/${S.caseId}/predict`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ n_models: S.nModels }) });
+      await api(`/api/cases/${S.caseId}/predict`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ n_models: S.nModels, tta: S.tta }) });
       startPoll();
     } catch (e) { toast(e.message); }
   };
@@ -361,12 +362,12 @@
     else if (p) {
       const si = p.stage ? STAGES.findIndex(s => s[0] === p.stage) : 0;
       idx = Math.max(0, si);
-      const n = p.of || S.nModels, m = p.model || 0;
+      const n = (p.of || S.nModels) * (p.passes || 1), m = (p.pass || 0) * (p.of || 1) + (p.model || 0);
       frac = p.stage ? (m + (si - 1) / 7) / n : 0.01;
     }
     el.innerHTML = STAGES.map(([k, label], i) => `<div class="s ${i < idx ? "done" : i === idx ? "run" : ""}"><i></i>${label}</div>`).join("");
     $("#prog").style.width = `${clamp(frac, 0, 1) * 100}%`;
-    $("#pipe-msg").textContent = p && p !== "done" && p.of ? `Model ${p.model + 1} of ${p.of} · ${elapsed?.toFixed(0)}s elapsed` : p === "done" ? "" : p ? "Queued…" : "";
+    $("#pipe-msg").textContent = p && p !== "done" && p.of ? `Model ${p.model + 1} of ${p.of}${p.passes > 1 ? ` · pass ${p.pass + 1}/${p.passes}` : ""} · ${elapsed?.toFixed(0)}s elapsed` : p === "done" ? "" : p ? "Queued…" : "";
     $$(".arch .blk").forEach(b => b.classList.toggle("live", p && p !== "done" && b.dataset.stage === (p.stage || "")));
   }
 
@@ -407,16 +408,19 @@
       $("#big-sub").textContent = S.caseId ? "press ▶ to run PyCanc" : "load a CT";
       yrs.innerHTML = Array.from({ length: 6 }, (_, i) => `<div class="year"><b>—</b><span>YR ${i + 1}</span></div>`).join("");
       $("#curve").innerHTML = ""; $("#hot").innerHTML = `<div class="placeholder">Hotspots appear after prediction</div>`;
-      renderWarn(null); return;
+      renderWarn(null); renderClinical(); return;
     }
     const r6 = res.risk[5];
     $("#arc").style.opacity = 1;
     $("#arc").setAttribute("stroke-dasharray", `${433.5 * SQ(r6)} 578`);
     animateNumber($("#big"), r6 * 100);
-    $("#big-sub").textContent = `${res.models_used} model${res.models_used > 1 ? "s" : ""} · ${res.calibrated ? "calibrated" : "uncalibrated"} · ${res.seconds}s`;
-    yrs.innerHTML = res.risk.map((p, i) => `<div class="year" title="P(cancer within ${i + 1} yr)"><div class="fill" style="height:0%"></div><b>${pct(p)}%</b><span>YR ${i + 1}</span></div>`).join("");
+    const spread = res.risk_low && (res.models_used > 1 || res.tta_passes > 1);
+    $("#big-sub").innerHTML = (spread ? `<div class="range">95% range ${pct(res.risk_low[5])}–${pct(res.risk_high[5])}%</div>` : "")
+      + `${res.models_used} model${res.models_used > 1 ? "s" : ""}${res.tta_passes > 1 ? ` × ${res.tta_passes} TTA` : ""} · ${Math.round(res.seconds)} s`;
+    $("#big-sub").title = res.calibrated ? `${res.calibration} calibration` : "uncalibrated";
+    yrs.innerHTML = res.risk.map((p, i) => `<div class="year" title="P(cancer within ${i + 1} yr)${spread ? ` · 95% range ${pct(res.risk_low[i])}–${pct(res.risk_high[i])}%` : ""}"><div class="fill" style="height:0%"></div><b>${pct(p)}%</b><span>YR ${i + 1}</span></div>`).join("");
     requestAnimationFrame(() => $$(".year .fill").forEach((f, i) => f.style.height = `${SQ(res.risk[i]) * 100}%`));
-    drawCurve(res); drawHot(res); renderWarn(res);
+    drawCurve(res); drawHot(res); renderWarn(res); renderClinical();
   }
 
   function renderWarn(res) {
@@ -427,11 +431,13 @@
     } else if (res && currentCase()?.meta?.source === "Synthetic phantom") {
       el.innerHTML = `<div class="warn-box" style="border-color:rgba(59,224,255,.3);background:rgba(59,224,255,.06);color:#bfefff"><b style="color:var(--cyan)">Phantom scan.</b> Real MIT Sybil weights on a synthetic CT: useful for seeing how the model reacts to nodule size, density and location, not as a real risk estimate.</div>`;
     } else el.innerHTML = "";
+    const qw = currentCase()?.warnings || [];
+    if (qw.length) el.innerHTML += `<div class="warn-box" style="margin-top:8px"><b>Scan check.</b> ${qw.join(" ")}</div>`;
   }
 
   function drawCurve(res) {
     const svg = $("#curve"), Wd = 330, Hd = 190, L = 34, R = 14, T = 12, B = 24;
-    const all = [...res.risk, ...res.raw_ensemble, ...res.per_model.flat()];
+    const all = [...res.risk, ...res.raw_ensemble, ...res.per_model.flat(), ...(res.risk_high || [])];
     const nice = [0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1];
     const ymax = nice.find(v => v >= Math.max(...all) * 1.1) || 1;
     const X = t => L + t / 6 * (Wd - L - R), Y = p => Hd - B - p / ymax * (Hd - T - B);
@@ -444,6 +450,10 @@
     if (res.per_model.length > 1) res.per_model.forEach(m => g += `<path class="member" d="${path(m)}"/>`);
     g += `<path class="rawl" d="${path(res.raw_ensemble)}"/>`;
     g += `<path d="${path(res.risk)}L${X(6)},${Y(0)}Z" fill="url(#areaGrad)"/>`;
+    if (res.risk_low && (res.models_used > 1 || res.tta_passes > 1)) {
+      const up = res.risk_high.map((p, i) => `${X(i + 1).toFixed(1)},${Y(p).toFixed(1)}`), lo = res.risk_low.map((p, i) => `${X(i + 1).toFixed(1)},${Y(p).toFixed(1)}`).reverse();
+      g += `<path class="band" d="M${X(0)},${Y(0)}L${up.join("L")}L${lo.join("L")}Z"><title>95% uncertainty range</title></path>`;
+    }
     g += `<path class="main" id="mainline" d="${path(res.risk)}"/>`;
     res.risk.forEach((p, i) => g += `<circle class="pt" cx="${X(i + 1)}" cy="${Y(p)}" r="3.2"><title>Year ${i + 1}: ${pct(p, 2)}%</title></circle>`);
     g += `<text x="${X(6) - 4}" y="${Y(res.risk[5]) - 9}" text-anchor="end" style="fill:#fff;font-weight:700">${pct(res.risk[5])}%</text>`;
@@ -497,7 +507,8 @@
       ${st.official_weights ? `<span class="chip ok"><span class="dot"></span>MIT weights · ${st.num_models} models</span>`
         : `<span class="chip warn"><span class="dot"></span>${dl ? "Downloading weights…" : "Untrained weights"}</span>${dl ? "" : `<button class="btn ghost" id="dl">Get official weights</button>`}`}
       <span class="chip info"><span class="dot"></span>${st.calibrated ? "calibrated" : "uncalibrated"}</span>
-      <span class="chip"><span class="dot"></span>${st.device.toUpperCase()}${st.device === "cpu" ? ` · ${st.threads} threads` : ""}</span>`;
+      <span class="chip"><span class="dot"></span>${st.device === "mps" ? "APPLE GPU" : st.device.toUpperCase()}${st.device === "cpu" ? ` · ${st.threads} threads` : ""}${st.half_precision ? " · FP16" : ""}</span>
+      ${st.local_calibration ? `<span class="chip ok"><span class="dot"></span>local calibration</span>` : ""}`;
     $("#dl") && ($("#dl").onclick = downloadWeights);
     $$("#ens button").forEach(b => b.disabled = +b.dataset.v > st.num_models);
     if (S.nModels > st.num_models) { S.nModels = st.num_models; $$("#ens button").forEach(b => b.classList.toggle("on", +b.dataset.v === S.nModels)); }
@@ -507,8 +518,48 @@
   }
   async function downloadWeights() { await api("/api/weights/download", { method: "POST" }); toast("Downloading official MIT checkpoints…"); loadStatus(); }
   function updateEta() {
-    const cpu = S.status?.device === "cpu";
-    $("#eta").textContent = cpu ? `≈ ${S.nModels} min on CPU (about 60 s per model) · a GPU takes seconds` : "GPU: a few seconds per model";
+    const runs = S.nModels * S.tta, dev = S.status?.device;
+    const per = dev === "cuda" ? 3 : dev === "mps" ? 15 : 60;
+    const secs = runs * per;
+    $("#eta").textContent = `${runs} forward pass${runs > 1 ? "es" : ""} · ≈ ${secs < 90 ? secs + " s" : Math.round(secs / 60) + " min"} on ${dev === "mps" ? "Apple GPU" : (dev || "cpu").toUpperCase()}`;
+  }
+
+  // ------------------------------------------------------------------ clinical (PLCOm2012)
+  const cv = id => $(id).value;
+  $("#c-smk").onchange = () => $("#c-quit-l").style.opacity = cv("#c-smk") === "former" ? 1 : 0.4;
+  $("#c-smk").onchange();
+  function patientForm() {
+    return {
+      age: +cv("#c-age"), bmi: +cv("#c-bmi"), smoking_status: cv("#c-smk"), cigarettes_per_day: +cv("#c-cpd"),
+      smoking_years: +cv("#c-yrs"), years_since_quit: cv("#c-smk") === "former" ? +cv("#c-quit") : 0,
+      education: cv("#c-edu"), race: cv("#c-race"), copd: $("#c-copd").checked,
+      family_lung_cancer: $("#c-fam").checked, personal_cancer_history: $("#c-hx").checked,
+    };
+  }
+  $("#c-go").onclick = async () => {
+    if (!S.caseId) return toast("Load a case first");
+    S.patients[S.caseId] = patientForm();
+    await renderClinical();
+  };
+  async function renderClinical() {
+    const el = $("#clin"), pt = S.patients[S.caseId];
+    if (!pt) { el.innerHTML = `<div class="placeholder">Add patient history on the left to compare image-based and clinical risk</div>`; return; }
+    let r;
+    try { r = await (await api("/api/clinical", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patient: pt, image_risk: S.result?.risk || null }) })).json(); }
+    catch (e) { el.innerHTML = `<div class="placeholder">${e.message}</div>`; return; }
+    if (!r.applicable) { el.innerHTML = `<div class="small">${r.note}</div>`; return; }
+    const max = Math.max(0.1, r.risk * 1.3, S.result ? S.result.risk[5] * 1.3 : 0);
+    const img = S.result ? S.result.risk[5] : null;
+    el.innerHTML = `
+      <div class="crow"><b>${pct(r.risk, 2)}%</b><span class="tag ${r.eligible ? "hi" : "lo"}">${r.eligible ? "≥ 1.51% · screening-eligible" : "below 1.51% threshold"}</span></div>
+      <div class="meter"><i style="width:0"></i><u style="left:${r.threshold / max * 100}%" title="1.51% PLCOm2012 screening threshold"></u></div>
+      <div class="cmp">
+        <div><b>${img != null ? pct(img) + "%" : "—"}</b><span>Image</span></div>
+        <div><b>${pct(r.risk)}%</b><span>Clinical</span></div>
+        <div><b>${r.fused ? pct(r.fused[5]) + "%" : "—"}</b><span>Combined</span></div>
+      </div>
+      <div class="small">${r.fused ? "Combined = image + clinical fusion fitted on your local outcomes." : r.fusion_available ? "Run a prediction to see the combined score." : "A combined score appears once a fusion model is fitted on local outcomes (python -m pycanc.evaluate --fit-fusion)."} ${r.note || ""}</div>`;
+    requestAnimationFrame(() => el.querySelector(".meter i").style.width = `${Math.min(100, r.risk / max * 100)}%`);
   }
 
   // ------------------------------------------------------------------ snapshot / report
@@ -538,7 +589,9 @@
       <h2>Predicted risk</h2><div class="big">${pct(res.risk[5])}%</div><div class="muted">probability of lung cancer diagnosis within 6 years (${res.models_used}-model ensemble, ${res.calibrated ? "calibrated" : "uncalibrated"})</div>
       <table style="margin-top:12px"><tr><th></th>${res.risk.map((_, i) => `<th>Year ${i + 1}</th>`).join("")}</tr>
       <tr><td>Calibrated</td>${res.risk.map(p => `<td>${pct(p, 2)}%</td>`).join("")}</tr>
+      ${res.risk_low && (res.models_used > 1 || res.tta_passes > 1) ? `<tr><td>95% range</td>${res.risk.map((_, i) => `<td>${pct(res.risk_low[i])}–${pct(res.risk_high[i])}%</td>`).join("")}</tr>` : ""}
       <tr><td>Raw score</td>${res.raw_ensemble.map(p => `<td>${pct(p, 2)}%</td>`).join("")}</tr></table>
+      ${$("#clin .crow b") ? `<h2>Clinical risk (PLCOm2012)</h2><div>6-year risk from smoking and clinical history: <b>${$("#clin .crow b").textContent}</b> · ${$("#clin .tag").textContent}</div>` : ""}
       <h2>Model attention</h2><img src="${img}"><table style="margin-top:10px"><tr><th>#</th><th>Slice</th><th>Side</th><th>Relative attention</th></tr>
       ${res.hotspots.map((h, i) => `<tr><td>${i + 1}</td><td>${h.z - S.valid[0] + 1}</td><td>${h.x < 128 ? "right" : "left"}</td><td>${(h.score * 100).toFixed(0)}%</td></tr>`).join("")}</table>
       <h2>Notes</h2><div class="warn">${res.official_weights ? "" : "<b>Untrained weights were used — values are not meaningful.</b> "}Research replica of Sybil (Mikhael et al., J Clin Oncol 2023). Not a medical device; not for diagnosis or clinical decision-making.</div>
@@ -574,7 +627,7 @@
       if (i < lines.length) { term.innerHTML += `<div>${lines[i++]}</div>`; setTimeout(next, 650); return; }
       const st = S.status;
       if (!st && waits++ < 8) { setTimeout(next, 700); return; }
-      term.innerHTML += st ? `<div class="${st.official_weights ? "ok" : "warn"}">  ${st.official_weights ? `✓ ${st.num_models} official MIT models ready on ${st.device.toUpperCase()}` : "! no trained weights found · click “Get official weights”"}</div>`
+      term.innerHTML += st ? `<div class="${st.official_weights ? "ok" : "warn"}">  ${st.official_weights ? `✓ ${st.num_models} official MIT models ready on ${st.device === "mps" ? "Apple GPU" : st.device.toUpperCase()}` : "! no trained weights found · click “Get official weights”"}</div>`
         : `<div class="warn">  ! server offline</div>`;
     };
     setTimeout(next, 1700);

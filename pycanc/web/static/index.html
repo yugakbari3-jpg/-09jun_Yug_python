@@ -128,9 +128,35 @@
     </div>
 
     <div class="sec">
+      <h3>Patient <small class="opt">optional</small></h3>
+      <details class="pt" id="pt">
+        <summary>Add clinical history for PLCOm2012</summary>
+        <div class="pgrid">
+          <label>Age<input class="num" type="number" id="c-age" value="62" min="18" max="100"></label>
+          <label>BMI<input class="num" type="number" id="c-bmi" value="27" step="0.1"></label>
+          <label class="full">Smoking
+            <select class="sel" id="c-smk"><option value="current">Current smoker</option><option value="former">Former smoker</option><option value="never">Never smoked</option></select></label>
+          <label>Cigs / day<input class="num" type="number" id="c-cpd" value="20" min="1"></label>
+          <label>Years smoked<input class="num" type="number" id="c-yrs" value="30" min="0"></label>
+          <label class="full" id="c-quit-l">Years since quitting<input class="num" type="number" id="c-quit" value="0" min="0"></label>
+          <label class="full">Education
+            <select class="sel" id="c-edu"><option value="less_than_high_school">Less than high school</option><option value="high_school" selected>High school</option><option value="post_high_school_training">Post-high-school training</option><option value="some_college">Some college</option><option value="college_graduate">College graduate</option><option value="postgraduate">Postgraduate</option></select></label>
+          <label class="full">Ethnicity
+            <select class="sel" id="c-race"><option value="white">White</option><option value="black">Black</option><option value="hispanic">Hispanic</option><option value="asian">Asian</option><option value="american_indian_alaska_native">American Indian / Alaska Native</option><option value="native_hawaiian_pacific_islander">Native Hawaiian / Pacific Islander</option></select></label>
+          <label class="chk"><input type="checkbox" id="c-copd">COPD</label>
+          <label class="chk"><input type="checkbox" id="c-fam">Family history</label>
+          <label class="chk full"><input type="checkbox" id="c-hx">Personal history of cancer</label>
+        </div>
+        <button class="btn wide" id="c-go">Compute clinical risk</button>
+      </details>
+    </div>
+
+    <div class="sec">
       <h3>Run PyCanc</h3>
       <div class="row"><span>Ensemble size</span></div>
       <div class="seg" id="ens"><button data-v="1" class="on">1 model</button><button data-v="3">3</button><button data-v="5">5 · full</button></div>
+      <div class="row" style="margin-top:12px"><span title="Re-run on slightly shifted / rotated copies and average: steadier risk and an uncertainty range">Test-time augmentation</span></div>
+      <div class="seg" id="tta"><button data-v="1" class="on">Off</button><button data-v="3">3 passes</button><button data-v="5">5 passes</button></div>
       <button class="btn primary wide" id="run" style="margin-top:12px">▶ Predict 6-year risk</button>
       <div class="hint" id="eta"></div>
     </div>
@@ -229,6 +255,11 @@
         </div>
       </div>
       <div class="years" id="years"></div>
+    </div>
+
+    <div class="sec" id="clin-sec">
+      <h3>Clinical risk · PLCOm2012</h3>
+      <div class="clin" id="clin"><div class="placeholder">Add patient history on the left to compare image-based and clinical risk</div></div>
     </div>
 
     <div class="sec" id="warn"></div>

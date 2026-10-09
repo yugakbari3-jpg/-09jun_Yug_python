@@ -23,7 +23,8 @@ from pydantic import BaseModel
 from pycanc import weights
 from pycanc.phantom import make_phantom
 from pycanc.predict import PyCancEngine
-from pycanc.preprocess import load_any, preprocess, to_model_coords
+from pycanc.clinical import Patient, plcom2012
+from pycanc.preprocess import load_any, preprocess, quality_checks, to_model_coords
 
 STATIC = Path(__file__).parent / "static"
 
@@ -48,6 +49,7 @@ def _new_case(ct, name: str) -> dict:
         "spacing": list(ct.spacing),
         "shape": list(ct.hu.shape),
         "valid": list(prep.valid),
+        "warnings": quality_checks(ct),
         "prep": prep,
         "job": {"state": "idle"},
     }
@@ -131,6 +133,7 @@ def get_volume(cid: str, kind: str):
 
 class PredictParams(BaseModel):
     n_models: int | None = None
+    tta: int = 1
 
 
 @app.post("/api/cases/{cid}/predict")
@@ -144,7 +147,7 @@ def predict(cid: str, p: PredictParams):
     def run():
         job["state"] = "running"
         try:
-            res = engine.predict(case["prep"], p.n_models, progress=lambda d: job.__setitem__("progress", d))
+            res = engine.predict(case["prep"], p.n_models, p.tta, progress=lambda d: job.__setitem__("progress", d))
             attn = res.pop("attention")
             res["attention_b64"] = base64.b64encode(np.clip(attn * 255, 0, 255).astype(np.uint8).tobytes()).decode()
             res["attention_shape"] = list(attn.shape)
@@ -162,6 +165,25 @@ def predict(cid: str, p: PredictParams):
 @app.get("/api/cases/{cid}/job")
 def get_job(cid: str):
     return _case(cid)["job"]
+
+
+class ClinicalParams(BaseModel):
+    patient: dict
+    image_risk: list[float] | None = None
+
+
+@app.post("/api/clinical")
+def clinical(p: ClinicalParams):
+    """PLCOm2012 6-year risk, plus the fused image + clinical risk when a fusion model has been fitted."""
+    try:
+        res = plcom2012(Patient(**p.patient))
+    except TypeError as e:
+        raise HTTPException(400, f"bad patient fields: {e}")
+    res["fused"] = None
+    if engine.fusion is not None and p.image_risk and res["risk"] is not None:
+        res["fused"] = engine.fusion(p.image_risk, res["risk"])
+    res["fusion_available"] = engine.fusion is not None
+    return res
 
 
 @app.post("/api/weights/download")

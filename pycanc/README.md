@@ -19,6 +19,14 @@ PyCanc is a from-scratch re-implementation of that model, plus a full imaging wo
   includes slice-attention profiles, hotspot navigation, PNG snapshots and printable reports.
 * **A procedural chest-CT phantom.** It has vessels, airways, ribs, heart and a configurable nodule, so you can try
   everything without patient data.
+* **Accuracy and trust features.** Test-time augmentation, uncertainty ranges from ensemble and augmentation spread,
+  exact per-model calibration for partial ensembles, and automatic scan-quality checks (including Sybil's 2.5 mm
+  slice-thickness limit).
+* **Clinical risk.** PLCOm2012 (age, smoking, COPD, family history…) side by side with the image risk, plus an
+  image + clinical fusion model you can fit on your own outcomes.
+* **Measurement tools.** `pycanc.evaluate` reports AUC with 95% CIs, C-index, Brier score and calibration, and can fit a
+  local calibrator or fusion model.
+* **Fast on any hardware.** Uses CUDA (FP16), Apple-silicon GPU (MPS) or CPU automatically.
 * **Training code** with the paper's objectives (masked survival BCE plus attention guidance from nodule boxes).
 
 ![welcome](docs/welcome.png)
@@ -69,13 +77,38 @@ result = engine.predict(preprocess(load_any("scan.zip")))
 print(result["risk"])                    # calibrated P(cancer within 1..6 years)
 ```
 
+## Measuring and improving it on your data
+
+```bash
+# 1. measure: AUC per year (+95% CI), 6-year C-index, Brier, calibration table
+python -m pycanc.evaluate --csv test.csv --models 5 --tta 3 --out results/
+
+# 2. recalibrate to your population (fit on one set, then evaluate on another!)
+python -m pycanc.evaluate --predictions results/predictions.csv --fit-calibration
+
+# 3. combine image + clinical risk (needs clinical columns for >= 30 scans)
+python -m pycanc.evaluate --predictions results/predictions.csv --fit-fusion
+```
+
+The CSV needs `path, years_to_cancer, years_to_last_followup`. Adding `age, smoking_status, cigarettes_per_day,
+smoking_years, years_since_quit, education, bmi, copd, personal_cancer_history, family_lung_cancer, race` enables
+PLCOm2012 and fusion. Fitted files (`local_calibrator.json`, `fusion.json`) are saved next to the weights and are
+picked up automatically by the CLI and the workstation.
+
+| Option | What it does | Cost |
+|---|---|---|
+| `--models 5` | full MIT ensemble with the official ensemble calibrator | 5× time |
+| `--tta 3` / `--tta 5` | averages predictions over shifted and rotated copies and adds the spread to the uncertainty range | 3–5× time |
+| `--device mps` | Apple-silicon GPU (picked automatically when it works) | — |
+
 ## Using the workstation
 
 | Action | How |
 |---|---|
 | Load a scan | Drag a zipped DICOM series, a NIfTI file or an `.npz` (`hu`, `spacing`) onto **Load CT** |
 | Synthetic case | Set nodule size, type (solid / part-solid / GGO), margin, lung and level, then **Generate phantom** |
-| Run PyCanc | Pick an ensemble size and press **▶ Predict** (about 60 s per model on CPU; a few seconds on GPU) |
+| Patient history | Open **Patient** and enter age and smoking history to get PLCOm2012 risk next to the image risk |
+| Run PyCanc | Pick the ensemble size and test-time augmentation, then press **▶ Predict**. The ETA shows the expected time |
 | Navigate | Click or drag to move the crosshair, use the wheel or ↑/↓ to scroll slices, double-click a view to maximise it |
 | 3D | Drag to orbit and scroll to zoom. Modes: Bronchovascular · Skeleton + lungs · Soft tissue · MIP · Attention focus |
 | Explain | Toggle the attention overlay and opacity, click hotspots or the slice-attention bars to jump to them |
@@ -92,9 +125,10 @@ Checked against the official release (v1.5.0 checkpoints):
   inserted nodule. 6-year risk rises from 6.2% (no nodule) to 10.7% (14 mm spiculated nodule), using a single
   model with calibration.
 
-Known simplifications: the DICOM reader keeps the largest series and does not apply Sybil's slice-thickness filter.
-Subset ensembles (2–4 models) reuse the 5-model calibrator. Inputs whose in-plane matrix is not 512 are rescaled to a
-nominal 512 grid before resampling.
+Known simplifications: the DICOM reader keeps the largest series. Series thicker than Sybil's 2.5 mm limit are
+analysed with a warning instead of being rejected. Inputs whose in-plane matrix is not 512 are rescaled to a nominal
+512 grid before resampling. Test-time augmentation and the image + clinical fusion are PyCanc additions, not part
+of the published model.
 
 ## Project layout
 
@@ -103,7 +137,10 @@ pycanc/
   model.py       PyCancNet: r3d_18 encoder, MultiAttentionPool, Cumulative_Probability_Layer
   preprocess.py  readers (DICOM / NIfTI / npz), Sybil preprocessing, lung mask, coordinate mapping
   weights.py     checkpoint download, safe loading, isotonic calibrators
-  predict.py     PyCancEngine: ensemble inference, calibration, attention maps, hotspots
+  predict.py     PyCancEngine: device choice, ensemble, TTA, calibration, uncertainty, attention, hotspots
+  clinical.py    PLCOm2012 clinical risk model
+  fusion.py      image + clinical logistic fusion (fit locally)
+  evaluate.py    AUC / C-index / calibration, local recalibration and fusion fitting
   phantom.py     procedural low-dose chest CT with a configurable nodule
   train.py       survival + attention-guided training / fine-tuning, C-index evaluation
   cli.py         download / predict / serve

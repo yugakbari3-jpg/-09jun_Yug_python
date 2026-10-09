@@ -430,3 +430,34 @@ select.sel { padding: 6px 10px; border-radius: 9px; border: 1px solid var(--line
   .steps { grid-template-columns: 1fr; }
 }
 .home::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(90deg, rgba(4, 6, 12, 0.85) 0%, rgba(4, 6, 12, 0.4) 40%, transparent 60%); }
+
+/* ---------- patient form / clinical card / uncertainty ---------- */
+.sec h3 .opt { font-size: 10px; color: var(--faint); letter-spacing: 0.08em; text-transform: none; font-weight: 600; margin-left: auto; }
+details.pt summary { cursor: pointer; list-style: none; padding: 9px 12px; border-radius: 11px; border: 1px dashed var(--line-strong); color: #c7d0ea; font-size: 12.5px; font-weight: 600; }
+details.pt summary::before { content: "+ "; color: var(--cyan); }
+details.pt[open] summary::before { content: "– "; }
+details.pt[open] summary { margin-bottom: 12px; }
+.pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 10px; margin-bottom: 12px; }
+.pgrid label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0.03em; }
+.pgrid label.full { grid-column: 1 / -1; }
+.pgrid .num { width: 100%; }
+.pgrid .sel { width: 100%; }
+.pgrid label.chk { flex-direction: row; align-items: center; gap: 8px; color: #c7d0ea; font-size: 12px; }
+.pgrid input[type=checkbox] { accent-color: var(--cyan); width: 15px; height: 15px; }
+.clin { display: flex; flex-direction: column; gap: 10px; }
+.clin .crow { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 6px; }
+.clin .crow b { font: 800 26px var(--sans); letter-spacing: -0.02em; }
+.clin .crow span { color: var(--muted); font-size: 12px; }
+.clin .meter { position: relative; height: 8px; border-radius: 5px; background: rgba(255,255,255,0.06); overflow: visible; }
+.clin .meter i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: linear-gradient(90deg, var(--cyan), var(--violet), var(--rose)); transition: width 1s cubic-bezier(.2,.8,.2,1); }
+.clin .meter u { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.clin .tag { display: inline-flex; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.clin .tag.hi { background: rgba(255,77,125,0.14); color: #ff9db6; border: 1px solid rgba(255,77,125,0.35); }
+.clin .tag.lo { background: rgba(61,255,168,0.1); color: var(--green); border: 1px solid rgba(61,255,168,0.3); }
+.clin .cmp { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.clin .cmp div { border: 1px solid var(--line); border-radius: 10px; padding: 8px; text-align: center; background: rgba(0,0,0,0.15); }
+.clin .cmp b { display: block; font: 700 15px var(--mono); }
+.clin .cmp span { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.clin .small { font-size: 11px; color: var(--faint); }
+.hero .range { font: 600 12px var(--mono); color: #c7d0ea; margin-top: 2px; }
+.chart .band { fill: rgba(255, 120, 160, 0.22); stroke: rgba(255, 120, 160, 0.35); stroke-width: 0.8; stroke-dasharray: 2 3; }

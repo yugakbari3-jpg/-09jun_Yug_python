@@ -78,3 +78,46 @@ def test_concordance_and_isotonic():
     assert concordance_index(np.array([0.9, 0.1]), np.array([1, 5]), np.array([1, 0])) == 1.0
     iso = SimpleIsotonic([[1.0]], [0.0], [0, 1], [0, 0.5])
     assert np.allclose(iso(np.array([0.5])), [0.25])
+
+
+def test_plcom2012_reference_profile_and_monotone():
+    from pycanc.clinical import Patient, plcom2012
+    base = plcom2012(Patient(age=62, smoking_status="former", cigarettes_per_day=24.87, smoking_years=27,
+                             years_since_quit=10, education="some_college", bmi=27))
+    # at the model's centring values only the intercept (and the cig term ~0) remains
+    assert abs(base["logit"] - (-4.532506)) < 0.01
+    older = plcom2012(Patient(age=72, smoking_status="current", smoking_years=50, copd=True))
+    assert older["risk"] > base["risk"] and older["eligible"]
+    assert plcom2012(Patient(age=60, smoking_status="never"))["risk"] is None
+
+
+def test_tta_augment_shapes_and_identity():
+    from pycanc.predict import augment
+    x = torch.randn(1, 3, 4, 32, 32)
+    assert torch.equal(augment(x, 0, 0, 0), x)
+    y = augment(x, 2, 2, 5)
+    assert y.shape == x.shape and torch.equal(y[:, 0], y[:, 1])
+
+
+def test_metrics_and_isotonic_fit():
+    from pycanc.evaluate import auc, isotonic_fit
+    assert auc(np.array([0.9, 0.8, 0.1, 0.2]), np.array([1, 1, 0, 0])) == 1.0
+    assert auc(np.array([0.5, 0.5]), np.array([1, 0])) == 0.5
+    x0, y0 = isotonic_fit(np.array([0.1, 0.2, 0.3, 0.4]), np.array([0, 1, 0, 1]))
+    assert np.all(np.diff(y0) >= 0)
+
+
+def test_fusion_logistic_recovers_signal():
+    from pycanc.fusion import fit_logistic
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(400, 2))
+    y = (rng.random(400) < 1 / (1 + np.exp(-(0.5 + 2 * X[:, 0])))).astype(float)
+    w = fit_logistic(X, y)
+    assert 1.2 < w[1] < 2.8 and abs(w[2]) < 0.5
+
+
+def test_quality_checks_flag_thick_slices():
+    from pycanc.preprocess import CTVolume, quality_checks
+    ct = CTVolume(np.full((40, 64, 64), -800, np.float32), (5.0, 6.0, 6.0))
+    ct.hu[:, 20:40, 20:40] = 40
+    assert any("Slice spacing" in w for w in quality_checks(ct))
