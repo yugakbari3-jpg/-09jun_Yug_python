@@ -76,6 +76,19 @@ stage. It shows your variant as two base pairs (one per parent), labels the
 forward and reverse strands, and steps through how a reading from the other
 strand is flipped using the A–T / C–G pairing rule.
 
+For the full high-end version, open `deep_zoom.html`:
+
+- **Deep zoom**: a continuous zoom from a group of cells, into the nucleus, one
+  chromosome, DNA wound on histone spools, the double helix and finally the atoms
+  of your variant's base pair (idealised B-DNA geometry, hydrogen bonds shown).
+  A live scale bar shows the real size.
+- **Your genome**: every marker of a raw DNA file drawn as a GPU particle on its
+  chromosome. Load your own file (read inside the browser, never uploaded) and
+  watch the analyzer keep the 21 it needs.
+- Graphics quality is picked automatically from your device's frame rate
+  (Low / Medium / High / Ultra), and **Hero render** builds a 32-sample
+  anti-aliased still with depth of field at up to 3x resolution.
+
 | File | Job |
 | --- | --- |
 | `dna_analyzer.py` | Command-line entry point |

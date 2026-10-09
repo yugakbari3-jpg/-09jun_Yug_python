@@ -1,0 +1,1300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>DNA Deep Zoom</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a full-screen microscope stage; glass panels float over it (level notes top-left, controls along the bottom).
+   Deliberately single-theme: a dark-field microscope look, so every colour is set explicitly. */
+:root {
+  --void: #04070c; --glass: rgba(10, 18, 28, .72); --glass-hi: rgba(18, 30, 44, .86); --edge: rgba(150, 200, 230, .16);
+  --ink: #e8f1f6; --dim: #93a7b4; --cyan: #6fd8ff; --gold: #ffcf6b; --rose: #ff6f91; --mint: #5fe0b0;
+  --a: #46c27a; --c: #5b93f0; --g: #f0b53a; --t: #f06464;
+  --display: "Unbounded", "Avenir Next", "Segoe UI", sans-serif;
+  --body: "Figtree", "Helvetica Neue", "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--void); color: var(--ink); font: 14px/1.5 var(--body); overflow: hidden; }
+#app { position: fixed; inset: 0; }
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+#gl:active { cursor: grabbing; }
+.glass { background: var(--glass); border: 1px solid var(--edge); border-radius: 14px; backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3); }
+button, select, input { font: inherit; color: inherit; }
+button.b { background: var(--glass-hi); border: 1px solid var(--edge); color: var(--ink); border-radius: 9px; padding: 7px 12px; font: 600 13px var(--body); cursor: pointer; white-space: nowrap; }
+button.b:hover { border-color: var(--cyan); }
+button.b.on, button.b.primary { background: var(--cyan); color: #04121c; border-color: var(--cyan); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+select, input[type=text] { background: rgba(0,0,0,.35); border: 1px solid var(--edge); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+input[type=text] { font-family: var(--mono); text-transform: uppercase; letter-spacing: .12em; width: 64px; }
+
+/* top bar */
+.top { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 12px); left: 12px; right: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; pointer-events: none; }
+.top > * { pointer-events: auto; }
+.brand { font: 700 15px var(--display); letter-spacing: .02em; padding: 8px 12px; }
+.brand span { color: var(--cyan); }
+.tabs { display: flex; padding: 3px; gap: 3px; }
+.tabs button { border: 0; background: transparent; color: var(--dim); padding: 6px 12px; border-radius: 9px; font: 600 13px var(--body); cursor: pointer; }
+.tabs button[aria-selected=true] { background: var(--ink); color: #04121c; }
+.spacer { flex: 1; }
+.quality { display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 12px; font: 12px var(--mono); color: var(--dim); }
+.quality b { color: var(--mint); font-weight: 600; }
+.quality select { font: 12px var(--mono); padding: 4px 6px; }
+
+/* level notes */
+.notes { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 66px); left: 12px; width: min(380px, calc(100% - 24px)); padding: 14px 16px; display: grid; gap: 8px; }
+.eyebrow { font: 600 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--cyan); }
+.notes h1 { font: 700 clamp(20px, 2.4vw, 28px)/1.1 var(--display); margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+.notes p { margin: 0; color: var(--ink); }
+.notes .tie { font-size: 13px; color: var(--dim); border-left: 2px solid var(--gold); padding-left: 10px; }
+.notes .tie b { color: var(--gold); font-weight: 600; }
+.readout { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font: 12px var(--mono); color: var(--dim); font-variant-numeric: tabular-nums; }
+.readout b { color: var(--ink); font-weight: 600; }
+.scalebar { display: inline-grid; gap: 3px; }
+.scalebar i { display: block; height: 4px; border: 1px solid var(--ink); border-top: 0; min-width: 8px; }
+
+/* bottom dock */
+.dock { position: absolute; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); padding: 10px 12px; display: grid; gap: 8px; }
+.ticks { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+.ticks button { background: none; border: 0; color: var(--dim); font: 600 11px var(--mono); padding: 2px 0; cursor: pointer; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-top: 2px solid var(--edge); }
+.ticks button.on { color: var(--ink); border-top-color: var(--cyan); }
+input[type=range] { width: 100%; accent-color: var(--cyan); margin: 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.controls label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); }
+.controls .grow { flex: 1; }
+
+/* genome panel */
+.gpanel { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 66px); left: 12px; width: min(400px, calc(100% - 24px)); max-height: calc(100% - 160px); overflow: auto; padding: 14px 16px; display: grid; gap: 10px; }
+.gpanel h1 { font: 700 clamp(20px, 2.4vw, 26px)/1.1 var(--display); margin: 0; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.stats div { background: rgba(0,0,0,.28); border: 1px solid var(--edge); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.stats b { display: block; font: 600 16px var(--mono); font-variant-numeric: tabular-nums; }
+.stats span { font-size: 11px; color: var(--dim); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font: 11px var(--mono); color: var(--dim); }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.findings { display: grid; gap: 6px; }
+.find { background: rgba(0,0,0,.28); border: 1px solid var(--edge); border-radius: 10px; padding: 8px 10px; display: grid; gap: 2px; font-size: 13px; }
+.find .h { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.find .h b { font-weight: 600; }
+.find code { font: 600 12px var(--mono); color: var(--gold); }
+.find small { color: var(--dim); }
+.ev { font: 600 10px var(--mono); border: 1px solid currentColor; border-radius: 99px; padding: 0 6px; white-space: nowrap; }
+.ev.strong { color: var(--mint); } .ev.moderate { color: var(--gold); } .ev.weak { color: var(--dim); }
+.status { font: 12px var(--mono); color: var(--dim); }
+.status.err { color: var(--rose); }
+.filebtn { position: relative; overflow: hidden; }
+.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* in-scene labels */
+.labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.tag { position: absolute; transform: translate(-50%, -50%); font: 700 14px var(--mono); padding: 2px 7px; border-radius: 7px; background: rgba(4,7,12,.78); border: 1px solid var(--edge); white-space: nowrap; }
+.tag.big { font-size: 17px; }
+.tag.note { font: 600 11px var(--mono); color: var(--gold); border-color: rgba(255,207,107,.4); }
+
+/* hero render bar */
+.herobar { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); padding: 8px 10px 8px 14px; display: flex; gap: 12px; align-items: center; font: 12px var(--mono); }
+.herobar .bar { width: 120px; height: 4px; background: var(--edge); border-radius: 2px; overflow: hidden; }
+.herobar .bar i { display: block; height: 100%; width: 0; background: var(--gold); }
+.hero-mode .notes, .hero-mode .dock, .hero-mode .gpanel, .hero-mode .top, .hero-mode .labels { display: none; }
+.fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--dim); }
+
+@media (max-width: 720px) {
+  .notes, .gpanel { top: calc(env(safe-area-inset-top, 0px) + 104px); padding: 10px 12px; gap: 6px; }
+  .notes p.long { display: none; }
+  .gpanel { max-height: 42%; }
+  .ticks button { font-size: 9px; }
+  .brand { font-size: 13px; }
+  .quality { padding-left: 8px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div id="app">
+  <canvas id="gl" aria-label="3D view. Drag to rotate; scroll, pinch or use the slider to zoom."></canvas>
+  <div class="labels" id="labels"></div>
+
+  <div class="top">
+    <div class="brand glass">DNA <span>Deep Zoom</span></div>
+    <div class="tabs glass" role="tablist">
+      <button role="tab" id="tabZoom" aria-selected="true" type="button">Deep zoom</button>
+      <button role="tab" id="tabGenome" aria-selected="false" type="button">Your genome</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="quality glass" title="Graphics quality is picked automatically from your device's frame rate.">
+      <span id="perf">Measuring…</span>
+      <label for="tier" class="sr" style="position:absolute;left:-9999px">Graphics quality</label>
+      <select id="tier">
+        <option value="auto">Auto</option><option value="ultra">Ultra</option><option value="high">High</option>
+        <option value="medium">Medium</option><option value="low">Low</option>
+      </select>
+    </div>
+    <button class="b primary" id="heroBtn" type="button">Hero render</button>
+  </div>
+
+  <!-- Deep zoom -->
+  <section class="notes glass" id="notes" aria-live="polite">
+    <div class="eyebrow" id="lvEyebrow">Level 1 of 6</div>
+    <h1 id="lvName">Cell</h1>
+    <p class="long" id="lvText"></p>
+    <p class="tie" id="lvTie"></p>
+    <div class="readout">
+      <span class="scalebar"><i id="sbBar" style="width:60px"></i><span id="sbText">10 µm</span></span>
+      <span>Zoom <b id="zoomX">1×</b></span>
+      <span id="triCount"></span>
+    </div>
+  </section>
+
+  <div class="dock glass" id="dock">
+    <div class="ticks" id="ticks"></div>
+    <label for="zoom" style="position:absolute;left:-9999px">Zoom level</label>
+    <input type="range" id="zoom" min="0" max="5.999" step="0.001" value="0.15">
+    <div class="controls">
+      <button class="b" id="dive" type="button">Auto-dive</button>
+      <label for="snp">Variant <select id="snp"></select></label>
+      <label for="geno">Genotype <input type="text" id="geno" maxlength="2" value="TC" autocomplete="off" spellcheck="false"></label>
+      <label for="copy">Base pair <select id="copy"><option value="0">from parent 1</option><option value="1">from parent 2</option></select></label>
+      <span class="grow"></span>
+    </div>
+  </div>
+
+  <!-- Genome -->
+  <section class="gpanel glass" id="gpanel" hidden>
+    <div class="eyebrow" id="gEyebrow">Example data</div>
+    <h1>Every marker in the file</h1>
+    <p id="gText">Each dot is one of the markers on a DNA chip, placed on its chromosome. Run the analyzer to watch it keep only the 21 it needs.</p>
+    <div class="stats">
+      <div><b id="sTotal">–</b><span>markers</span></div>
+      <div><b id="sCall">–</b><span>call rate</span></div>
+      <div><b id="sShown">–</b><span>drawn now</span></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:#5ab8ff"></i>same letter twice</span><span><i style="background:#ffb454"></i>two different letters</span>
+      <span><i style="background:#ff5a7a"></i>no call</span><span><i style="background:#ffffff"></i>analysed</span>
+    </div>
+    <div class="controls">
+      <button class="b primary" id="runBtn" type="button">Run the analyzer</button>
+      <span class="b filebtn" role="button">Load my DNA file<input type="file" id="file" accept=".txt,.csv,.tsv,.zip,.gz" aria-label="Load my DNA file"></span>
+      <label for="sens"><input type="checkbox" id="sens"> Show medical results</label>
+    </div>
+    <div class="status" id="gStatus">Your file is read inside this browser tab. Nothing is uploaded.</div>
+    <div class="findings" id="findings"></div>
+  </section>
+
+  <div class="herobar glass" id="herobar" hidden>
+    <span id="heroText">Rendering 0 / 32 samples</span><span class="bar"><i id="heroFill"></i></span>
+    <button class="b" id="heroExit" type="button">Done</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/BokehShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/SSAARenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/TAARenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/BokehPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
+<script>
+"use strict";
+const DB = {"snps":[{"rsid":"rs4988235","gene":"MCM6 / LCT","trait":"Lactose tolerance","category":"Nutrition","ref":"G","alt":"A","effect":"A","evidence":"strong","sensitive":false,"note":"This variant explains lactase persistence mainly in people of European ancestry; other populations carry different variants that this marker does not test.","results":["No copies of the lactase-persistence allele. Lactase production probably declines in adulthood, so lactose intolerance is likely.","One copy of the lactase-persistence allele. The effect is dominant, so you are likely able to digest lactose as an adult.","Two copies of the lactase-persistence allele. You are likely able to digest lactose as an adult."]},{"rsid":"rs1801133","gene":"MTHFR","trait":"Folate metabolism (C677T)","category":"Nutrition","ref":"G","alt":"A","effect":"A","evidence":"strong","sensitive":false,"note":"The effect on the enzyme is well established; claims that it causes most other health problems are not supported.","results":["CC (677CC): typical MTHFR enzyme activity.","CT (677CT): modestly reduced enzyme activity (about 65% of typical). Usually no practical effect.","TT (677TT): enzyme activity about 30% of typical. Linked to higher homocysteine, mainly when folate intake is low; adequate folate usually brings levels back to normal."]},{"rsid":"rs1801131","gene":"MTHFR","trait":"Folate metabolism (A1298C)","category":"Nutrition","ref":"T","alt":"G","effect":"G","evidence":"moderate","sensitive":false,"note":"","results":["AA (1298AA): typical MTHFR enzyme activity.","AC (1298AC): little or no measurable effect on its own.","CC (1298CC): mildly reduced enzyme activity, smaller than the C677T effect."]},{"rsid":"rs762551","gene":"CYP1A2","trait":"Caffeine metabolism","category":"Nutrition","ref":"A","alt":"C","effect":"A","evidence":"moderate","sensitive":false,"note":"Smoking, medication and other genes also change caffeine clearance.","results":["CC: slower caffeine metaboliser.","AC: slower caffeine metaboliser.","AA: fast caffeine metaboliser (the enzyme is more inducible, especially in smokers)."]},{"rsid":"rs601338","gene":"FUT2","trait":"Secretor status (vitamin B12, norovirus)","category":"Nutrition","ref":"G","alt":"A","effect":"A","evidence":"strong","sensitive":false,"note":"This is the main non-secretor variant in European and African populations; East Asian populations mostly carry a different one.","results":["Secretor: blood-group antigens are released into saliva and gut.","Secretor (one non-secretor copy, which is recessive).","Non-secretor: blood-group antigens are not released into body fluids. Linked to strong resistance to common norovirus strains and to higher vitamin B12 levels."]},{"rsid":"rs671","gene":"ALDH2","trait":"Alcohol flush reaction","category":"Alcohol","ref":"G","alt":"A","effect":"A","evidence":"strong","sensitive":false,"note":"Common in East Asian populations, rare elsewhere.","results":["Typical ALDH2 activity; no genetic alcohol flush from this variant.","One copy of ALDH2*2: much lower enzyme activity, so facial flushing after alcohol is likely. In carriers, drinking is linked to a markedly higher risk of oesophageal cancer.","Two copies of ALDH2*2: almost no enzyme activity; strong flushing and very poor alcohol tolerance."]},{"rsid":"rs1229984","gene":"ADH1B","trait":"Alcohol metabolism speed","category":"Alcohol","ref":"C","alt":"T","effect":"T","evidence":"strong","sensitive":false,"note":"","results":["Typical ADH1B activity.","One copy of the fast ADH1B*2 allele: alcohol turns into acetaldehyde faster. Linked to a lower risk of alcohol dependence.","Two copies of the fast ADH1B*2 allele: alcohol turns into acetaldehyde much faster. Linked to a lower risk of alcohol dependence."]},{"rsid":"rs1815739","gene":"ACTN3","trait":"Muscle fibre type (R577X)","category":"Fitness","ref":"C","alt":"T","effect":"T","evidence":"moderate","sensitive":false,"note":"The effect matters at elite level; training matters far more for everyone else.","results":["RR: makes alpha-actinin-3 in fast-twitch muscle. Slightly more common among elite sprint and power athletes.","RX: makes alpha-actinin-3 in fast-twitch muscle.","XX: makes no alpha-actinin-3. Common (about 18% of Europeans) and harmless; slightly less common among elite sprinters."]},{"rsid":"rs4680","gene":"COMT","trait":"Dopamine breakdown (Val158Met)","category":"Fitness","ref":"G","alt":"A","effect":"A","evidence":"weak","sensitive":false,"note":"The enzyme effect is real; links to personality, stress or pain are inconsistent across studies.","results":["Val/Val: higher COMT activity, faster dopamine breakdown.","Val/Met: intermediate COMT activity.","Met/Met: COMT activity roughly 3-4 times lower, slower dopamine breakdown."]},{"rsid":"rs12913832","gene":"HERC2 / OCA2","trait":"Eye colour","category":"Traits","ref":"A","alt":"G","effect":"G","evidence":"strong","sensitive":false,"note":"The strongest single eye-colour marker, but other genes also contribute.","results":["AA: brown eyes most likely.","AG: brown or green/hazel eyes most likely; blue is less likely.","GG: blue or other light eyes most likely."]},{"rsid":"rs17822931","gene":"ABCC11","trait":"Earwax type and body odour","category":"Traits","ref":"C","alt":"T","effect":"T","evidence":"strong","sensitive":false,"note":"","results":["Wet earwax type.","Wet earwax type (the dry type is recessive).","Dry earwax type; also linked to less underarm odour."]},{"rsid":"rs72921001","gene":"OR6A2 region","trait":"Cilantro (coriander) tastes soapy","category":"Traits","ref":"C","alt":"A","effect":"A","evidence":"weak","sensitive":false,"note":"A real but small effect: most people with this variant still like cilantro.","results":["Typical odds of finding cilantro soapy.","Slightly higher odds of finding cilantro soapy.","Higher odds of finding cilantro soapy."]},{"rsid":"rs2187668","gene":"HLA-DQA1 (DQ2.5)","trait":"Coeliac disease genetic risk","category":"Health","ref":"C","alt":"T","effect":"T","evidence":"strong","sensitive":false,"note":"Roughly 30% of people of European ancestry carry DQ2/DQ8, but only about 1% develop coeliac disease.","results":["Does not carry this HLA-DQ2.5 marker. HLA-DQ8 and other types are not tested here, so coeliac disease is not ruled out.","Carries one copy of the HLA-DQ2.5 marker, the main genetic risk factor for coeliac disease. Many carriers never develop it.","Carries two copies of the HLA-DQ2.5 marker, the main genetic risk factor for coeliac disease. Many carriers never develop it."]},{"rsid":"rs7903146","gene":"TCF7L2","trait":"Type 2 diabetes risk","category":"Health","ref":"C","alt":"T","effect":"T","evidence":"strong","sensitive":false,"note":"The strongest common type 2 diabetes variant, but weight, activity and diet matter much more.","results":["CC: typical genetic risk from this variant.","CT: about 1.4 times the odds of type 2 diabetes compared with CC.","TT: about 2 times the odds of type 2 diabetes compared with CC."]},{"rsid":"rs10757274","gene":"CDKN2B-AS1 (9p21)","trait":"Coronary artery disease risk","category":"Health","ref":"A","alt":"G","effect":"G","evidence":"strong","sensitive":false,"note":"Blood pressure, cholesterol, smoking and activity matter much more.","results":["AA: typical genetic risk from this region.","AG: about 1.2-1.3 times the odds of coronary artery disease compared with AA.","GG: about 1.5-1.6 times the odds of coronary artery disease compared with AA."]},{"rsid":"rs10455872","gene":"LPA","trait":"Lipoprotein(a) level","category":"Health","ref":"A","alt":"G","effect":"G","evidence":"strong","sensitive":false,"note":"Lp(a) is mostly set by genes; many other LPA variants also affect it.","results":["No copies of this high-Lp(a) marker.","One copy: linked to raised lipoprotein(a) and higher heart disease risk. A one-off Lp(a) blood test gives the real number.","Two copies: linked to raised lipoprotein(a) and higher heart disease risk. A one-off Lp(a) blood test gives the real number."]},{"rsid":"rs6025","gene":"F5","trait":"Factor V Leiden (blood clots)","category":"Medical","ref":"C","alt":"T","effect":"T","evidence":"strong","sensitive":true,"note":"Risk rises further with oestrogen-containing medication, surgery and long periods of immobility.","results":["Factor V Leiden not detected.","One copy of Factor V Leiden: about 3-8 times the typical risk of venous blood clots. Worth confirming with a clinical test.","Two copies of Factor V Leiden: much higher risk of venous blood clots. Please confirm with a clinical test and talk to a doctor."]},{"rsid":"rs1799963","gene":"F2","trait":"Prothrombin G20210A (blood clots)","category":"Medical","ref":"G","alt":"A","effect":"A","evidence":"strong","sensitive":true,"note":"","results":["Prothrombin G20210A not detected.","One copy of prothrombin G20210A: about 2-3 times the typical risk of venous blood clots. Worth confirming with a clinical test.","Two copies of prothrombin G20210A: much higher risk of venous blood clots. Please confirm with a clinical test and talk to a doctor."]},{"rsid":"rs1800562","gene":"HFE","trait":"Hereditary haemochromatosis (C282Y)","category":"Medical","ref":"G","alt":"A","effect":"A","evidence":"strong","sensitive":true,"note":"","results":["HFE C282Y not detected.","Carrier of one HFE C282Y copy. Carriers rarely develop iron overload.","Two copies of HFE C282Y, the main cause of hereditary haemochromatosis. Many (not all) people with this develop iron overload; ferritin and transferrin saturation blood tests can check."]}],"apoe":{"results":{"e3/e3":"The most common APOE type; typical Alzheimer's risk.","e2/e3":"Slightly lower Alzheimer's risk than e3/e3.","e2/e2":"Lower Alzheimer's risk; a small share of people with e2/e2 develop a cholesterol disorder (type III hyperlipoproteinaemia).","e3/e4":"One e4 copy: about 3 times the typical Alzheimer's risk. Most people with one copy do not develop Alzheimer's disease.","e2/e4":"One e2 and one e4 copy: roughly 2-3 times the typical Alzheimer's risk.","e4/e4":"Two e4 copies: about 8-12 times the typical Alzheimer's risk. Many people with e4/e4 never develop it; consider genetic counselling before acting on this."},"trait":"APOE type (Alzheimer's disease and cholesterol)","note":"APOE results can be upsetting and are not a diagnosis. Raw data cannot tell e2/e4 apart from the very rare e1/e3."}};
+const SNPS = DB.snps, APOE_DB = DB.apoe;
+
+// Approximate GRCh37 locations (chromosome, megabases) of each analysed variant.
+const LOC = {
+  rs4988235: ["2", 136.61], rs1801133: ["1", 11.86], rs1801131: ["1", 11.85], rs762551: ["15", 75.04],
+  rs601338: ["19", 49.21], rs671: ["12", 112.24], rs1229984: ["4", 100.24], rs1815739: ["11", 66.33],
+  rs4680: ["22", 19.95], rs12913832: ["15", 28.37], rs17822931: ["16", 48.26], rs72921001: ["11", 6.89],
+  rs2187668: ["6", 32.61], rs7903146: ["10", 114.76], rs10757274: ["9", 22.10], rs10455872: ["6", 161.01],
+  rs6025: ["1", 169.52], rs1799963: ["11", 46.76], rs1800562: ["6", 26.09], rs429358: ["19", 45.41], rs7412: ["19", 45.41],
+};
+const CHROMS = ["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","X","Y","MT"];
+const CHR_LEN = { 1: 249.25, 2: 243.2, 3: 198.02, 4: 191.15, 5: 180.92, 6: 171.12, 7: 159.14, 8: 146.36, 9: 141.21, 10: 135.53,
+  11: 135.01, 12: 133.85, 13: 115.17, 14: 107.35, 15: 102.53, 16: 90.35, 17: 81.2, 18: 78.08, 19: 59.13, 20: 63.03,
+  21: 48.13, 22: 51.3, X: 155.27, Y: 59.37, MT: 0.0166 };
+const CENTRO = { 1: 125, 2: 93.3, 3: 91, 4: 50.4, 5: 48.4, 6: 61, 7: 59.9, 8: 45.6, 9: 49, 10: 40.2, 11: 53.7, 12: 35.8,
+  13: 17.9, 14: 17.6, 15: 19, 16: 36.6, 17: 24, 18: 17.2, 19: 26.5, 20: 27.5, 21: 13.2, 22: 14.7, X: 60.6, Y: 12.5, MT: 0.008 };
+// The synthetic sample file's genotypes, used for the example genome.
+const SAMPLE = { rs1801133: "AG", rs1801131: "TT", rs6025: "CC", rs4988235: "AG", rs1229984: "CC", rs2187668: "CC",
+  rs1800562: "AG", rs10455872: "--", rs10757274: "AG", rs7903146: "CT", rs1815739: "CT", rs1799963: "GG",
+  rs72921001: "CC", rs671: "GG", rs762551: "AA", rs12913832: "AG", rs17822931: "CC", rs429358: "TT", rs7412: "CC",
+  rs601338: "AG", rs4680: "AG" };
+const WANTED = new Set([...SNPS.map(s => s.rsid), "rs429358", "rs7412"]);
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+// ---------------------------------------------------------------- analyzer logic (same as analyzer.py)
+const COMP = { A: "T", T: "A", C: "G", G: "C" };
+const NO_CALLS = new Set(["", "-", "--", "0", "00", "NC", "??"]);
+function isNoCall(g) { return NO_CALLS.has(g) || g.includes("-") || g.includes("0"); }
+function orient(g, ref, alt) {
+  const a = g.split(""); if (a.length !== 2) return null;
+  const ok = x => x === ref || x === alt;
+  if (a.every(ok)) return { alleles: a, flipped: false };
+  const f = a.map(x => COMP[x]);
+  if (f.every(ok)) return { alleles: f, flipped: true };
+  return null;
+}
+function analyzeAll(genos, nocalls, includeSensitive) {
+  const out = [];
+  for (const s of SNPS) {
+    const f = { trait: s.trait, gene: s.gene, rsid: s.rsid, evidence: s.evidence, sensitive: s.sensitive };
+    const g = genos.get(s.rsid);
+    if (nocalls.has(s.rsid)) f.status = "No call";
+    else if (!g) f.status = "Not tested";
+    else {
+      const o = orient(g, s.ref, s.alt);
+      if (!o) { f.status = "Unexpected genotype"; f.geno = g; }
+      else { f.geno = o.alleles.slice().sort().join(""); f.result = s.results[o.alleles.filter(a => a === s.effect).length]; }
+    }
+    out.push(f);
+  }
+  // APOE from two markers
+  const a = genos.get("rs429358"), b = genos.get("rs7412");
+  const apoe = { trait: APOE_DB.trait, gene: "APOE", rsid: "rs429358 + rs7412", evidence: "strong", sensitive: true };
+  if (nocalls.has("rs429358") || nocalls.has("rs7412")) apoe.status = "No call";
+  else if (!a || !b) apoe.status = "Not tested";
+  else {
+    const oa = orient(a, "T", "C"), ob = orient(b, "C", "T");
+    if (!oa || !ob) apoe.status = "Unexpected genotype";
+    else {
+      const e4 = oa.alleles.filter(x => x === "C").length, e2 = ob.alleles.filter(x => x === "T").length;
+      const kind = { "0,0": "e3/e3", "1,0": "e3/e4", "2,0": "e4/e4", "0,1": "e2/e3", "0,2": "e2/e2", "1,1": "e2/e4" }[e4 + "," + e2];
+      if (!kind) apoe.status = "Unexpected genotype"; else { apoe.geno = kind; apoe.result = APOE_DB.results[kind]; }
+    }
+  }
+  out.push(apoe);
+  const hidden = out.filter(f => f.sensitive && !includeSensitive).length;
+  return { findings: out.filter(f => includeSensitive || !f.sensitive), hidden };
+}
+
+// ---------------------------------------------------------------- quality tiers
+const TIERS = {
+  low:    { pr: 1,    heroPr: 1.5, seg: 10, cartoonBp: 30, atomBp: 18, nuc: 22, terr: 70,  tube: 0.55, ribo: 5000,  pores: 110, particles: 150000, bloom: false, ssaa: 0, cells: 3 },
+  medium: { pr: 1.25, heroPr: 2,   seg: 14, cartoonBp: 40, atomBp: 26, nuc: 40, terr: 130, tube: 0.9,  ribo: 15000, pores: 260, particles: 300000, bloom: true,  ssaa: 0, cells: 5 },
+  high:   { pr: 1.75, heroPr: 2.5, seg: 20, cartoonBp: 56, atomBp: 36, nuc: 70, terr: 240, tube: 1.4,  ribo: 40000, pores: 480, particles: 600000, bloom: true,  ssaa: 0, cells: 6 },
+  ultra:  { pr: 2,    heroPr: 3,   seg: 28, cartoonBp: 72, atomBp: 48, nuc: 110, terr: 380, tube: 2.2, ribo: 90000, pores: 800, particles: 1000000, bloom: true, ssaa: 1, cells: 8 },
+};
+const TIER_ORDER = ["low", "medium", "high", "ultra"];
+
+// ---------------------------------------------------------------- state
+const state = {
+  mode: "zoom", u: 0.15, uTarget: 0.15, dive: false, hero: false,
+  snp: SNPS.findIndex(s => s.rsid === "rs671"), geno: "TC", copy: 0,
+  tierName: matchMedia("(pointer: coarse)").matches ? "medium" : "high", autoTier: true,
+  genome: null, runT: 0, running: false,
+};
+
+// ================================================================ renderer
+let renderer, camera, controls, composer, taa, bloom, bokeh, output, zoomScene, genomeScene, envTex, isWebGL2;
+const lin = hex => new THREE.Color(hex).convertSRGBToLinear();
+
+function initRenderer() {
+  const canvas = $("gl");
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance", stencil: false });
+  isWebGL2 = renderer.capabilities.isWebGL2;
+  renderer.toneMapping = THREE.NoToneMapping;           // tone mapping happens in the final pass
+  renderer.outputEncoding = THREE.LinearEncoding;
+  renderer.info.autoReset = false;
+  camera = new THREE.PerspectiveCamera(45, 1, 0.0004, 60);
+  camera.position.set(0.42, 0.28, 0.86).setLength(1);
+  controls = new THREE.OrbitControls(camera, canvas);
+  Object.assign(controls, { enableZoom: false, enablePan: false, enableDamping: true, dampingFactor: 0.07, rotateSpeed: 0.55,
+                            autoRotate: !reduced, autoRotateSpeed: 0.28 });
+
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  envTex = pmrem.fromScene(new THREE.RoomEnvironment(), 0.04).texture;
+  zoomScene = makeScene(); genomeScene = makeScene();
+
+  const rt = new THREE.WebGLRenderTarget(2, 2, { type: isWebGL2 ? THREE.HalfFloatType : THREE.UnsignedByteType,
+    format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+  composer = new THREE.EffectComposer(renderer, rt);
+  taa = new THREE.TAARenderPass(zoomScene, camera, 0x04070c, 1);
+  taa.unbiased = true; taa.sampleLevel = 0; taa.accumulate = false;
+  bokeh = new THREE.BokehPass(zoomScene, camera, { focus: 1.0, aperture: 0.02, maxblur: 0.0035, width: 2, height: 2 });
+  bokeh.enabled = false;
+  bloom = new THREE.UnrealBloomPass(new THREE.Vector2(2, 2), 0.55, 0.35, 0.95);
+  output = new THREE.ShaderPass({
+    uniforms: { tDiffuse: { value: null }, exposure: { value: 0.92 } },
+    vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float exposure; varying vec2 vUv;
+      vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
+      void main(){
+        vec3 c = texture2D(tDiffuse, vUv).rgb * exposure;
+        c = aces(c);
+        c = pow(c, vec3(1.0/2.2));
+        vec2 q = vUv - 0.5; c *= 1.0 - dot(q, q) * 0.6;            // lens vignette
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+  });
+  composer.addPass(taa); composer.addPass(bokeh); composer.addPass(bloom); composer.addPass(output);
+}
+function makeScene() {
+  const s = new THREE.Scene();
+  s.background = lin("#04070c");
+  s.environment = envTex;
+  const key = new THREE.DirectionalLight(0xfff3e6, 0.95); key.position.set(3, 4, 2);
+  const rim = new THREE.DirectionalLight(0x7fc8ff, 0.7); rim.position.set(-4, -1, -3);
+  s.add(key, rim, new THREE.HemisphereLight(0x8fb8ff, 0x1a1020, 0.12));
+  return s;
+}
+
+// ---------------------------------------------------------------- shared materials and shaders
+function physical(hex, o = {}) {
+  return new THREE.MeshPhysicalMaterial(Object.assign({ color: lin(hex), roughness: 0.35, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.25, envMapIntensity: 0.5 }, o, o.emissive ? { emissive: lin(o.emissive) } : {}));
+}
+function rimMaterial(hex, power, intensity) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: lin(hex) }, uPow: { value: power }, uInt: { value: intensity }, uOpacity: { value: 1 } },
+    vertexShader: `varying vec3 vN; varying vec3 vV;
+      void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform vec3 uColor; uniform float uPow, uInt, uOpacity; varying vec3 vN; varying vec3 vV;
+      void main(){ float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), uPow); gl_FragColor = vec4(uColor * f * uInt * uOpacity, 1.0); }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+}
+// Soft glowing points; size is in world units and scales with the level.
+function glowPoints(positions, colors, sizes, opacity = 1) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute("aColor", new THREE.Float32BufferAttribute(colors, 3));
+  g.setAttribute("aSize", new THREE.Float32BufferAttribute(sizes, 1));
+  const m = new THREE.ShaderMaterial({
+    uniforms: { uOpacity: { value: opacity }, uPx: pxUniform, uWorld: { value: 1 } },
+    vertexShader: `attribute vec3 aColor; attribute float aSize; uniform float uPx; uniform float uWorld; varying vec3 vC;
+      void main(){ vC = aColor; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = max(1.0, aSize * uWorld * uPx / -mv.z); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform float uOpacity; varying vec3 vC;
+      void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.0, d); gl_FragColor = vec4(vC * a * a * uOpacity, 1.0); }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  m.userData.baseOpacity = opacity; m.userData.worldScaled = true;
+  return new THREE.Points(g, m);
+}
+const pxUniform = { value: 500 };
+function tubeColors(geo, colorAt) {
+  // Vertex colours along a TubeGeometry: colorAt(fraction along the tube) -> THREE.Color
+  const n = geo.attributes.position.count, segs = geo.parameters.tubularSegments, rad = geo.parameters.radialSegments + 1;
+  const col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { const c = colorAt(Math.floor(i / rad) / segs); col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+}
+function displaceSphere(geo, amp, freq, seed) {
+  const p = geo.attributes.position, v = new THREE.Vector3(), r = rng(seed);
+  const ph = [r() * 6, r() * 6, r() * 6, r() * 6];
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const n = v.clone().normalize();
+    const d = Math.sin(n.x * freq + ph[0]) * Math.cos(n.y * freq * 1.3 + ph[1]) + 0.5 * Math.sin(n.z * freq * 2.1 + ph[2]) * Math.sin(n.x * freq * 1.7 + ph[3]);
+    v.addScaledVector(n, d * amp); p.setXYZ(i, v.x, v.y, v.z);
+  }
+  geo.computeVertexNormals();
+}
+function fibSphere(n, r) {
+  const out = [], ga = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < n; i++) { const y = 1 - (i + 0.5) / n * 2, rr = Math.sqrt(1 - y * y), t = ga * i; out.push(new THREE.Vector3(Math.cos(t) * rr * r, y * r, Math.sin(t) * rr * r)); }
+  return out;
+}
+
+// ---------------------------------------------------------------- variant helpers
+function variant() { return SNPS[state.snp]; }
+function strandLetters() {
+  const s = variant(), g = state.geno.trim().toUpperCase();
+  if (isNoCall(g) || g.length !== 2) return { fwd: ["?", "?"], rev: ["?", "?"], read: null, o: null, g };
+  const o = orient(g, s.ref, s.alt), a = g.split("");
+  if (o && o.flipped) return { fwd: o.alleles, rev: a, read: "−", o, g };
+  return { fwd: a, rev: a.map(x => COMP[x] || "?"), read: "+", o, g };
+}
+
+// ================================================================ the six zoom levels
+// Each level: { group, inner, far, near, unit (metres per world unit), parts: [{ obj, out?: [u0, u1] }], labels(): [...] }
+const LEVELS = [
+  { name: "Cell", eyebrow: "Tissue and cell" },
+  { name: "Nucleus", eyebrow: "Inside the nucleus" },
+  { name: "Chromosome", eyebrow: "One chromosome" },
+  { name: "Chromatin", eyebrow: "DNA on its spools" },
+  { name: "Double helix", eyebrow: "The two strands" },
+  { name: "Atoms", eyebrow: "One base pair, atom by atom" },
+];
+let levels = [];
+
+function finishLevel(L, idx) {
+  // collect materials so the level can fade
+  L.group.traverse(o => {
+    if (!o.material) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    mats.forEach(m => {
+      if (m.userData.baseOpacity === undefined) m.userData.baseOpacity = m.uniforms && m.uniforms.uOpacity ? m.uniforms.uOpacity.value : m.opacity;
+      m.userData.baseTransparent = m.transparent; m.userData.baseDepthWrite = m.depthWrite;
+    });
+  });
+  (L.parts || []).forEach(p => { p.mats = []; p.obj.traverse(o => o.material && p.mats.push(...(Array.isArray(o.material) ? o.material : [o.material]))); });
+  L.idx = idx;
+  zoomScene.add(L.group);
+  return L;
+}
+function newLevel(target) {
+  const group = new THREE.Group(), inner = new THREE.Group();
+  inner.position.copy(target).multiplyScalar(-1);
+  group.add(inner);
+  return { group, inner };
+}
+
+// ---- Level 0: a small patch of tissue, one cell in front
+function buildCell(t) {
+  const L = newLevel(new THREE.Vector3(0, 0, 0)), r = rng(11), S = t.seg / 20;
+  Object.assign(L, { far: 110, near: 9, unit: 1e-6, parts: [] });
+  const cell = new THREE.Group();
+  const memGeo = new THREE.SphereGeometry(10, Math.round(96 * S), Math.round(64 * S)); displaceSphere(memGeo, 0.45, 2.2, 3);
+  cell.add(new THREE.Mesh(memGeo, physical("#7fc4d9", { roughness: 0.12, clearcoat: 1, transparent: true, opacity: 0.13, side: THREE.DoubleSide, depthWrite: false })));
+  const rimMesh = new THREE.Mesh(memGeo, rimMaterial("#6fd8ff", 2.6, 1.3)); rimMesh.scale.setScalar(1.005); cell.add(rimMesh);
+  L.inner.add(cell); L.parts.push({ obj: cell, out: [0.66, 0.9] });
+
+  const nucGeo = new THREE.SphereGeometry(3.2, Math.round(80 * S), Math.round(56 * S)); displaceSphere(nucGeo, 0.12, 3, 8);
+  L.inner.add(new THREE.Mesh(nucGeo, physical("#4b44b8", { roughness: 0.3, clearcoat: 1, emissive: "#231c7a", emissiveIntensity: 0.9 })));
+  const nrim = new THREE.Mesh(nucGeo, rimMaterial("#b4a8ff", 2.0, 2.2)); nrim.scale.setScalar(1.01); L.inner.add(nrim);
+
+  // mitochondria
+  const mito = new THREE.Group();
+  const mGeo = new THREE.SphereGeometry(1, Math.round(28 * S), Math.round(18 * S));
+  const mMat = physical("#ff8a4c", { roughness: 0.45, clearcoat: 0.7, emissive: "#5a1d05", emissiveIntensity: 0.6 });
+  for (let i = 0; i < 34; i++) {
+    const m = new THREE.Mesh(mGeo, mMat);
+    const dir = new THREE.Vector3(r() - .5, r() - .5, r() - .5).normalize();
+    m.position.copy(dir.multiplyScalar(4.6 + r() * 4));
+    m.scale.set(1.3 + r() * .5, 0.48, 0.48); m.rotation.set(r() * 6, r() * 6, r() * 6);
+    mito.add(m);
+  }
+  L.inner.add(mito); L.parts.push({ obj: mito, out: [0.8, 0.95] });
+
+  // endoplasmic reticulum: curving sheets around the nucleus
+  const er = new THREE.Group(), erMat = physical("#5fe0b0", { roughness: 0.3, transparent: true, opacity: 0.55, emissive: "#0d4a37", emissiveIntensity: 0.8 });
+  for (let k = 0; k < 10; k++) {
+    const pts = [], rad = 3.9 + r() * 1.6, tilt = new THREE.Euler(r() * 6, r() * 6, 0);
+    for (let a = 0; a < 9; a++) { const ang = a / 8 * Math.PI * (1.1 + r() * .5); pts.push(new THREE.Vector3(Math.cos(ang) * rad, Math.sin(a * 1.7) * 0.5, Math.sin(ang) * rad).applyEuler(tilt)); }
+    er.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), Math.round(90 * S), 0.11, 8, false), erMat));
+  }
+  L.inner.add(er); L.parts.push({ obj: er, out: [0.86, 0.98] });
+
+  // Golgi stack
+  const golgi = new THREE.Group(), gMat = physical("#ffcf6b", { roughness: 0.35, emissive: "#5a3d05", emissiveIntensity: 0.7 });
+  for (let k = 0; k < 6; k++) { const m = new THREE.Mesh(new THREE.TorusGeometry(1.6 - k * 0.12, 0.09, 8, Math.round(48 * S), Math.PI * 1.1), gMat); m.position.set(5.6, 1.8 + k * 0.28, -2.2); m.rotation.set(Math.PI / 2, 0, 0.6); golgi.add(m); }
+  L.inner.add(golgi); L.parts.push({ obj: golgi, out: [0.8, 0.95] });
+
+  // ribosomes and cytoplasm haze
+  const pos = [], col = [], size = [], c1 = lin("#bfe9ff"), c2 = lin("#ffd9a8");
+  for (let i = 0; i < t.ribo; i++) {
+    const d = new THREE.Vector3(r() - .5, r() - .5, r() - .5).normalize().multiplyScalar(3.5 + Math.pow(r(), 0.7) * 6.2);
+    pos.push(d.x, d.y, d.z); const c = r() < 0.85 ? c1 : c2; col.push(c.r * .5, c.g * .5, c.b * .5); size.push(0.05 + r() * 0.08);
+  }
+  const ribo = glowPoints(pos, col, size, 0.9); L.inner.add(ribo); L.parts.push({ obj: ribo, out: [0.78, 0.95] });
+
+  // neighbouring cells
+  const nb = new THREE.Group();
+  for (let i = 0; i < t.cells; i++) {
+    const ang = i / t.cells * Math.PI * 2 + 0.4, d = 23 + r() * 4;
+    const g = new THREE.SphereGeometry(9 + r() * 2, Math.round(48 * S), Math.round(32 * S)); displaceSphere(g, 0.5, 2, 20 + i);
+    const c = new THREE.Group();
+    c.add(new THREE.Mesh(g, physical("#7fc4d9", { roughness: 0.15, transparent: true, opacity: 0.08, depthWrite: false })));
+    const rm = new THREE.Mesh(g, rimMaterial("#5ab8ff", 2.6, 1.2)); c.add(rm);
+    const n = new THREE.Mesh(new THREE.SphereGeometry(3, 24, 16), physical("#3d37a0", { emissive: "#1d1766", emissiveIntensity: 0.8 }));
+    n.position.set(r() - .5, r() - .5, r() - .5); c.add(n);
+    c.position.set(Math.cos(ang) * d, (r() - .5) * 10, Math.sin(ang) * d);
+    nb.add(c);
+  }
+  L.inner.add(nb); L.parts.push({ obj: nb, out: [0.18, 0.36] });
+  return L;
+}
+
+// ---- Level 1: nucleus with 46 chromosome territories
+function buildNucleus(t) {
+  const [chr] = LOC[variant().rsid], r = rng(23), S = t.seg / 20;
+  const ci = CHROMS.indexOf(chr);
+  // territory centres
+  const centres = [];
+  for (let k = 0; k < 46; k++) {
+    let p; do { p = new THREE.Vector3(r() - .5, r() - .5, r() - .5).multiplyScalar(14); } while (p.length() > 6.8 || p.distanceTo(new THREE.Vector3(-3, 2, 1)) < 2.6);
+    centres.push(p);
+  }
+  const targetK = ci * 2;
+  const L = newLevel(centres[targetK].clone());
+  Object.assign(L, { far: 28, near: 5, unit: 3.2e-7, parts: [] });
+
+  const shell = new THREE.Group();
+  const eg = new THREE.SphereGeometry(10, Math.round(96 * S), Math.round(64 * S)); displaceSphere(eg, 0.25, 2.5, 5);
+  shell.add(new THREE.Mesh(eg, physical("#6d63d8", { roughness: 0.2, clearcoat: 1, transparent: true, opacity: 0.05, side: THREE.DoubleSide, depthWrite: false })));
+  shell.add(new THREE.Mesh(eg, rimMaterial("#b4a8ff", 2.6, 1.2)));
+  // nuclear pores
+  const pores = new THREE.InstancedMesh(new THREE.TorusGeometry(0.16, 0.05, 8, 18), physical("#bdb3ff", { emissive: "#6a5cff", emissiveIntensity: 0.35 }), t.pores);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), zAxis = new THREE.Vector3(0, 0, 1);
+  fibSphere(t.pores, 10).forEach((p, i) => { q.setFromUnitVectors(zAxis, p.clone().normalize()); m4.compose(p, q, new THREE.Vector3(1, 1, 1)); pores.setMatrixAt(i, m4); });
+  shell.add(pores);
+  L.inner.add(shell); L.parts.push({ obj: shell, out: [1.42, 1.6] });
+
+  const nucleolus = new THREE.Mesh((() => { const g = new THREE.SphereGeometry(1.7, 48, 32); displaceSphere(g, 0.25, 4, 9); return g; })(),
+    physical("#e07be0", { roughness: 0.55, emissive: "#5a1a5a", emissiveIntensity: 0.9 }));
+  nucleolus.position.set(-3, 2, 1);
+  const others = new THREE.Group(), mine = new THREE.Group();
+  others.add(nucleolus);
+  for (let k = 0; k < 46; k++) {
+    const cIdx = Math.floor(k / 2), isMine = cIdx === ci;
+    const pts = [], c = centres[k]; let p = c.clone();
+    const rr = rng(100 + k);
+    for (let j = 0; j < t.terr; j++) {
+      p = p.clone().add(new THREE.Vector3(rr() - .5, rr() - .5, rr() - .5).multiplyScalar(0.9));
+      if (p.distanceTo(c) > 2.1) p.lerp(c, 0.35);
+      if (p.length() > 9.2) p.multiplyScalar(0.92);
+      pts.push(p);
+    }
+    const geo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), Math.round(pts.length * 3 * t.tube), isMine ? 0.17 : 0.13, isMine ? 10 : 6, false);
+    const hue = cIdx / 23;
+    const col = new THREE.Color().setHSL(hue, isMine ? 0.95 : 0.5, isMine ? 0.62 : 0.4).convertSRGBToLinear();
+    const mat = new THREE.MeshPhysicalMaterial({ color: col, roughness: 0.35, clearcoat: 0.8, emissive: isMine ? col : new THREE.Color(0), emissiveIntensity: isMine ? 1.3 : 0 });
+    (isMine ? mine : others).add(new THREE.Mesh(geo, mat));
+  }
+  L.inner.add(others, mine); L.parts.push({ obj: others, out: [1.5, 1.78] });
+  return L;
+}
+
+// ---- Level 2: the variant's chromosome, condensed, with G-bands and a marker
+function buildChromosome(t) {
+  const [chr, mb] = LOC[variant().rsid];
+  const len = CHR_LEN[chr], cen = CENTRO[chr] / len;
+  const Lc = 8 + 16 * len / 249, yTop = cen * Lc, yBot = -(1 - cen) * Lc;
+  const ym = yTop - (mb / len) * Lc;
+  const xAt = y => 0.72 + 0.5 * smooth(0, 1.4, Math.abs(y));
+  const target = new THREE.Vector3(xAt(ym), ym, 0);
+  const L = newLevel(target);
+  Object.assign(L, { far: Lc * 1.25, near: 2.6, unit: (len * 0.02e-6) / Lc, parts: [], chr, mb, len });
+
+  // band pattern, seeded per chromosome
+  const br = rng(CHROMS.indexOf(chr) + 7), bands = [];
+  for (let y = 0; y < 1;) { const w = 0.015 + br() * 0.05; bands.push([y, y + w, br() < 0.5]); y += w; }
+  const light = lin("#d8cbb6"), dark = lin("#4a3470"), cenCol = lin("#ff6f91");
+  const colorAt = f => {
+    if (Math.abs(f - cen) < 0.012) return cenCol;
+    const b = bands.find(b => f >= b[0] && f < b[1]); return b && b[2] ? dark : light;
+  };
+  const mat = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.42, clearcoat: 0.7, clearcoatRoughness: 0.3 });
+  const chromatids = new THREE.Group();
+  [-1, 1].forEach(side => {
+    const pts = [], N = Math.round(Lc * 70 * t.tube), turns = Lc * 2.4;
+    for (let i = 0; i <= N; i++) {
+      const f = i / N, y = yTop - f * Lc, th = f * turns * Math.PI * 2 + (side > 0 ? 1.3 : 0);
+      const rc = 0.5 * (0.3 + 0.7 * smooth(0, 1.0, Math.abs(y)));
+      const endTaper = smooth(0, 0.6, Math.min(Math.abs(y - yTop), Math.abs(y - yBot)));
+      pts.push(new THREE.Vector3(side * xAt(y) + Math.cos(th) * rc * endTaper, y, Math.sin(th) * rc * endTaper));
+    }
+    const geo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), N * 3, 0.36, Math.max(6, Math.round(t.seg * 0.6)), false);
+    tubeColors(geo, f => colorAt(f));
+    chromatids.add(new THREE.Mesh(geo, mat));
+  });
+  L.inner.add(chromatids);
+  // marker rings at the variant's position
+  const ringMat = new THREE.MeshStandardMaterial({ color: lin("#ffcf6b"), emissive: lin("#ffb02e"), emissiveIntensity: 1.6, roughness: 0.3 });
+  [-1, 1].forEach(side => { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.06, 12, 64), ringMat); ring.rotation.x = Math.PI / 2; ring.position.set(side * xAt(ym), ym, 0); L.inner.add(ring); });
+  // spindle fibres pulling at the centromere
+  const fib = [], fc = [], fs = [], fr = rng(5), fcol = lin("#6fd8ff");
+  for (let i = 0; i < 1400; i++) {
+    const side = fr() < 0.5 ? -1 : 1, s = fr(), spread = (fr() - .5) * 2.5;
+    const x = side * (1.2 + s * 14), y = spread * s * 1.6, z = (fr() - .5) * s * 4;
+    fib.push(x, y, z); fc.push(fcol.r * .35, fcol.g * .35, fcol.b * .35); fs.push(0.06);
+  }
+  const fibres = glowPoints(fib, fc, fs, 0.8); L.inner.add(fibres); L.parts.push({ obj: fibres, out: [2.4, 2.7] });
+  L.parts.push({ obj: chromatids, out: [2.84, 3.02] });
+  L.labels = () => [{ local: new THREE.Vector3(xAt(ym) + 1.4, ym + 0.6, 0), text: `${variant().rsid} · ≈${Math.round(mb)} Mb`, cls: "note", w: [2.05, 2.75] }];
+  return L;
+}
+
+// ---- Level 3: chromatin fibre of nucleosomes
+function buildChromatin(t) {
+  const n = t.nuc, mid = Math.floor(n / 2), R = 11, per = 6, rise = 1.9;
+  const centre = k => { const a = k * Math.PI * 2 / per; return new THREE.Vector3(R * Math.cos(a), (k - mid) * rise, R * Math.sin(a)); };
+  const axisOf = k => { const a = k * Math.PI * 2 / per; return new THREE.Vector3(-Math.sin(a) * 0.35, 1, Math.cos(a) * 0.35).normalize(); };
+  const wraps = [];
+  for (let k = 0; k < n; k++) {
+    const c = centre(k), ax = axisOf(k);
+    const u = c.clone().setY(0).normalize(), v = new THREE.Vector3().crossVectors(ax, u).normalize(), uu = new THREE.Vector3().crossVectors(v, ax).normalize();
+    const pts = [], steps = Math.round(26 * Math.max(1, t.tube));
+    for (let i = 0; i <= steps; i++) {
+      const s = i / steps, th = s * 1.65 * Math.PI * 2 + k * 0.7;
+      pts.push(c.clone().addScaledVector(uu, 4.4 * Math.cos(th)).addScaledVector(v, 4.4 * Math.sin(th)).addScaledVector(ax, (s - 0.5) * 2.6));
+    }
+    wraps.push({ c, ax, pts });
+  }
+  const target = wraps[mid].pts[Math.floor(wraps[mid].pts.length * 0.35)].clone();
+  const L = newLevel(target);
+  Object.assign(L, { far: 150, near: 22, unit: 1e-9, parts: [] });
+
+  const all = [];
+  wraps.forEach((w, k) => {
+    all.push(...w.pts);
+    if (k < n - 1) { const a = w.pts[w.pts.length - 1], b = wraps[k + 1].pts[0]; const m = a.clone().lerp(b, 0.5); m.add(m.clone().setY(0).normalize().multiplyScalar(2.5)); all.push(m); }
+  });
+  const fibre = new THREE.Group();
+  const dnaGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(all, false, "centripetal"), all.length * 3, 0.95, Math.max(6, Math.round(t.seg * 0.5)), false);
+  fibre.add(new THREE.Mesh(dnaGeo, physical("#8fd3ff", { roughness: 0.22, clearcoat: 1, emissive: "#0b2a44", emissiveIntensity: 0.6 })));
+  // histone octamers (8 proteins per spool)
+  const hCols = ["#f4a261", "#e9c46a", "#2a9d8f", "#8ab17d"].map(lin);
+  const sphere = new THREE.SphereGeometry(1, Math.round(t.seg * 1.1), Math.round(t.seg * 0.8));
+  const histMat = physical("#ffffff", { roughness: 0.5, clearcoat: 0.4 });
+  const inst = new THREE.InstancedMesh(sphere, histMat, (n - 1) * 8), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1.75, 1.75, 1.75);
+  const tInst = new THREE.InstancedMesh(sphere, histMat.clone(), 8);
+  let idx = 0;
+  wraps.forEach((w, k) => {
+    const u = w.c.clone().setY(0).normalize(), v = new THREE.Vector3().crossVectors(w.ax, u).normalize();
+    for (let j = 0; j < 8; j++) {
+      const layer = j < 4 ? -1 : 1, a = (j % 4) * Math.PI / 2 + (layer > 0 ? Math.PI / 4 : 0);
+      const p = w.c.clone().addScaledVector(u, Math.cos(a) * 1.9).addScaledVector(v, Math.sin(a) * 1.9).addScaledVector(w.ax, layer * 1.2);
+      m4.compose(p, q, sc);
+      if (k === mid) { tInst.setMatrixAt(j, m4); tInst.setColorAt(j, hCols[j % 4]); }
+      else { inst.setMatrixAt(idx, m4); inst.setColorAt(idx, hCols[j % 4]); idx++; }
+    }
+  });
+  fibre.add(inst);
+  // the spool carrying the variant: glowing DNA
+  const hot = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(wraps[mid].pts), 160, 1.02, 16, false),
+    physical("#ffcf6b", { roughness: 0.25, emissive: "#ff9d1c", emissiveIntensity: 1.6 }));
+  L.inner.add(fibre, tInst, hot);
+  L.parts.push({ obj: fibre, out: [3.62, 3.88] });
+  L.labels = () => [{ local: wraps[mid].c.clone().add(new THREE.Vector3(0, 6, 0)), text: "147 bp around one spool", cls: "note", w: [3.05, 3.6] }];
+  return L;
+}
+
+// ---- B-DNA builder shared by the helix and atom levels (idealised geometry, Å)
+const RISE = 3.38, TWIST = 2 * Math.PI / 10.5;
+function pairTemplate(pur, pyr) {
+  const A = [], d = Math.PI / 180, r6 = 1.39;
+  const at = (cx, cy, ang, rad) => new THREE.Vector2(cx + rad * Math.cos(ang * d), cy + rad * Math.sin(ang * d));
+  const add = (el, v, side, name) => { A.push({ el, x: v.x, y: v.y, side, name }); return v; };
+  // purine: six-ring with N1 pointing at the partner, five-ring fused on C4–C5
+  const N1 = add("N", at(0, 0, 0, r6), 0, "N1"), C2 = add("C", at(0, 0, -60, r6), 0, "C2"), N3 = add("N", at(0, 0, -120, r6), 0, "N3");
+  const C4 = add("C", at(0, 0, 180, r6), 0, "C4"), C5 = add("C", at(0, 0, 120, r6), 0, "C5"), C6 = add("C", at(0, 0, 60, r6), 0, "C6");
+  const mE = C4.clone().add(C5).multiplyScalar(0.5), nE = mE.clone().normalize();
+  const Cp = mE.clone().addScaledVector(nE, 0.957), Rp = 1.182;
+  const a4 = Math.atan2(C4.y - Cp.y, C4.x - Cp.x), a5 = Math.atan2(C5.y - Cp.y, C5.x - Cp.x);
+  let step = a5 - a4; while (step > Math.PI) step -= 2 * Math.PI; while (step < -Math.PI) step += 2 * Math.PI; const sgn = Math.sign(step), st = sgn * 72 * d;
+  const pv = k => new THREE.Vector2(Cp.x + Rp * Math.cos(a5 + k * st), Cp.y + Rp * Math.sin(a5 + k * st));
+  add("N", pv(1), 0, "N7"); add("C", pv(2), 0, "C8"); const N9 = add("N", pv(3), 0, "N9");
+  if (pur === "A") add("N", at(0, 0, 60, r6 + 1.34), 0, "N6");
+  else { add("O", at(0, 0, 60, r6 + 1.24), 0, "O6"); add("N", at(0, 0, -60, r6 + 1.34), 0, "N2"); }
+  const c1a = N9.clone().addScaledVector(N9.clone().sub(Cp).normalize(), 1.47);
+  // pyrimidine: N3 faces the purine's N1 at 2.9 Å
+  const Q = 2 * r6 + 2.9;
+  add("N", at(Q, 0, 180, r6), 1, "N3"); add("C", at(Q, 0, 120, r6), 1, "C4"); add("C", at(Q, 0, 60, r6), 1, "C5");
+  add("C", at(Q, 0, 0, r6), 1, "C6"); const N1y = add("N", at(Q, 0, -60, r6), 1, "N1"); add("C", at(Q, 0, -120, r6), 1, "C2");
+  if (pyr === "T") { add("O", at(Q, 0, 120, r6 + 1.23), 1, "O4"); add("C", at(Q, 0, 60, r6 + 1.5), 1, "C7"); add("O", at(Q, 0, -120, r6 + 1.23), 1, "O2"); }
+  else { add("N", at(Q, 0, 120, r6 + 1.34), 1, "N4"); add("O", at(Q, 0, -120, r6 + 1.24), 1, "O2"); }
+  const c1b = at(Q, 0, -60, r6 + 1.47);
+  const hb = pur === "A" ? [["N6", "O4"], ["N1", "N3"]] : [["O6", "N4"], ["N1", "N3"], ["N2", "O2"]];
+  const centre = A.reduce((s, a) => s.add(new THREE.Vector2(a.x, a.y)), new THREE.Vector2()).multiplyScalar(1 / A.length);
+  return { atoms: A, c1: [c1a, c1b], glyN: [N9, N1y], hb, centre };
+}
+function buildBDNA(nbp, seq) {
+  // seq[i] = letter on strand 1 (forward); returns atoms, bonds, H-bonds, per-bp info
+  const atoms = [], bonds = [], hbonds = [], bp = [], P = [[], []], O3 = [[], []], C3 = [[], []];
+  const zU = new THREE.Vector3(0, 0, 1);
+  for (let i = 0; i < nbp; i++) {
+    const b1 = seq[i], b2 = COMP[b1] || "T", isPur = b1 === "A" || b1 === "G";
+    const tpl = pairTemplate(isPur ? b1 : b2, isPur ? b2 : b1);
+    const mir = !isPur;                        // keep strand 1 on the left
+    const rot = i * TWIST, z = (i - (nbp - 1) / 2) * RISE, cr = Math.cos(rot), sr = Math.sin(rot);
+    const toW = (x, y, zz = 0) => { let lx = x - tpl.centre.x, ly = y - tpl.centre.y; if (mir) lx = -lx; return new THREE.Vector3(lx * cr - ly * sr, lx * sr + ly * cr, z + zz); };
+    const start = atoms.length, names = {};
+    tpl.atoms.forEach(a => { const strand = mir ? 1 - a.side : a.side; const p = toW(a.x, a.y); names[a.side + a.name] = atoms.length; atoms.push({ el: a.el, p, bp: i, strand, part: "base" }); });
+    // ring and substituent bonds by distance
+    for (let a = start; a < atoms.length; a++) for (let b = a + 1; b < atoms.length; b++) if (atoms[a].p.distanceTo(atoms[b].p) < 1.6) bonds.push([a, b]);
+    tpl.hb.forEach(([x, y]) => hbonds.push([names["0" + x], names["1" + y], i]));
+    // sugars and phosphates for each strand
+    const c1w = [], glyIdx = [names["0N9"], names["1N1"]];
+    [0, 1].forEach(side => {
+      const strand = mir ? 1 - side : side, zs = strand === 0 ? 1 : -1;
+      const c = toW(tpl.c1[side].x, tpl.c1[side].y), rr = new THREE.Vector3(c.x, c.y, 0).normalize(), zz = zU.clone().multiplyScalar(zs);
+      const S = c.clone().addScaledVector(rr, 1.2), ring = [];
+      [180, 108, 36, -36, -108].forEach(deg => ring.push(S.clone().addScaledVector(rr, 1.2 * Math.cos(deg * Math.PI / 180)).addScaledVector(zz, 1.2 * Math.sin(deg * Math.PI / 180))));
+      const ids = ring.map((p, k) => { atoms.push({ el: k === 1 ? "O" : "C", p, bp: i, strand, part: "sugar" }); return atoms.length - 1; });
+      for (let k = 0; k < 5; k++) bonds.push([ids[k], ids[(k + 1) % 5]]);
+      bonds.push([glyIdx[side], ids[0]]);
+      const ang = Math.atan2(c.y, c.x) + zs * 0.18, Pp = new THREE.Vector3(Math.cos(ang) * 8.9, Math.sin(ang) * 8.9, z - zs * 1.7);
+      const C4p = ring[2], C5p = C4p.clone().lerp(Pp, 0.4).addScaledVector(rr, 0.4), O5p = C4p.clone().lerp(Pp, 0.72);
+      const pr = new THREE.Vector3(Pp.x, Pp.y, 0).normalize(), tg = new THREE.Vector3(-pr.y, pr.x, 0);
+      const add = (el, p, part) => { atoms.push({ el, p, bp: i, strand, part }); return atoms.length - 1; };
+      const iC5 = add("C", C5p, "sugar"), iO5 = add("O", O5p, "phos"), iP = add("P", Pp, "phos");
+      const iOP1 = add("O", Pp.clone().addScaledVector(pr, 1.05).addScaledVector(tg, 1.05), "phos"), iOP2 = add("O", Pp.clone().addScaledVector(pr, 1.05).addScaledVector(tg, -1.05), "phos");
+      bonds.push([ids[2], iC5], [iC5, iO5], [iO5, iP], [iP, iOP1], [iP, iOP2]);
+      P[strand][i] = iP; C3[strand][i] = ids[3]; c1w[strand] = c;
+    });
+    bp.push({ i, z, b1, b2, c1: c1w, centre: toW(tpl.centre.x, tpl.centre.y) });
+  }
+  // O3' links each sugar to the next phosphate along its strand
+  for (let i = 0; i < nbp; i++) {
+    [[0, i + 1], [1, i - 1]].forEach(([s, j]) => {
+      if (j < 0 || j >= nbp) return;
+      const a = atoms[C3[s][i]].p, b = atoms[P[s][j]].p;
+      atoms.push({ el: "O", p: a.clone().lerp(b, 0.42), bp: i, strand: s, part: "phos" });
+      const o = atoms.length - 1; bonds.push([C3[s][i], o], [o, P[s][j]]);
+    });
+  }
+  return { atoms, bonds, hbonds, bp, P };
+}
+function helixSeq(n, centre) {
+  const r = rng(77), s = []; for (let i = 0; i < n; i++) s.push("ACGT"[Math.floor(r() * 4)]);
+  s[centre] = centre !== null ? s[centre] : s[centre]; return s;
+}
+function focusLetter() { const L = strandLetters(); const f = L.fwd[state.copy]; return "ACGT".includes(f) ? f : null; }
+
+// ---- Level 4: double helix (ribbons, bases as slabs)
+const BASECOL = { A: "#46c27a", C: "#5b93f0", G: "#f0b53a", T: "#f06464", "?": "#7d8a94" };
+function buildHelix(t) {
+  const n = t.cartoonBp, mid = Math.floor(n / 2), seq = helixSeq(n);
+  const f = focusLetter(); seq[mid] = f || "A";
+  const D = buildBDNA(n, seq);
+  const L = newLevel(D.bp[mid].centre.clone());
+  Object.assign(L, { far: 120, near: 26, unit: 1e-10, parts: [] });
+  const rib = physical("#cfe6f5", { roughness: 0.2, clearcoat: 1, metalness: 0.1 });
+  [0, 1].forEach(s => {
+    const pts = D.P[s].filter(i => i !== undefined).map(i => D.atoms[i].p);
+    L.inner.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), pts.length * 12, 1.15, 14, false), rib));
+    const ph = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 20, 14), physical("#ff9b3d", { emissive: "#7a3300", emissiveIntensity: 0.5 }), pts.length);
+    const m4 = new THREE.Matrix4(); pts.forEach((p, k) => { m4.makeScale(1.25, 1.25, 1.25).setPosition(p); ph.setMatrixAt(k, m4); }); L.inner.add(ph);
+  });
+  const slab = new THREE.BoxGeometry(1, 1, 1);
+  const slabs = new THREE.InstancedMesh(slab, physical("#ffffff", { roughness: 0.35, clearcoat: 0.8 }), n * 2);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), xAx = new THREE.Vector3(1, 0, 0);
+  D.bp.forEach((b, k) => {
+    const a = b.c1[0], c = b.c1[1], mid2 = a.clone().lerp(c, 0.5);
+    [[a, b.b1], [c, b.b2]].forEach(([end, letter], j) => {
+      const centre = end.clone().lerp(mid2, 0.5), dir = mid2.clone().sub(end), len = dir.length();
+      q.setFromUnitVectors(xAx, dir.normalize());
+      m4.compose(centre, q, new THREE.Vector3(len * 0.98, 2.4, 0.9));
+      slabs.setMatrixAt(k * 2 + j, m4);
+      const col = lin(k === mid && !f ? BASECOL["?"] : BASECOL[letter]);
+      slabs.setColorAt(k * 2 + j, k === mid ? col.clone().multiplyScalar(2.2) : col);
+    });
+  });
+  L.inner.add(slabs);
+  // halo around the variant's base pair
+  const glow = new THREE.Mesh(new THREE.TorusGeometry(10.6, 0.12, 10, 96), new THREE.MeshStandardMaterial({ color: lin("#ffcf6b"), emissive: lin("#ffb02e"), emissiveIntensity: 2.5 }));
+  glow.position.copy(D.bp[mid].centre).setX(0).setY(0); L.inner.add(glow);
+  const rest = L.inner.children.slice(); const g = new THREE.Group(); rest.forEach(o => g.add(o)); L.inner.add(g);
+  L.parts.push({ obj: g, out: [4.86, 5.04] });
+  const SL = strandLetters();
+  L.labels = () => [
+    { local: D.bp[mid].c1[0].clone().multiplyScalar(1.25), text: `+ ${SL.fwd[state.copy]}`, cls: "big", w: [4.15, 4.86] },
+    { local: D.bp[mid].c1[1].clone().multiplyScalar(1.25), text: `− ${SL.rev[state.copy]}`, cls: "big", w: [4.15, 4.86] },
+    { local: new THREE.Vector3(0, 0, D.bp[mid].z + 16), text: "major and minor grooves", cls: "note", w: [4.0, 4.4] },
+  ];
+  return L;
+}
+
+// ---- Level 5: atoms
+const ELEM = { C: { c: "#9aa3ad", r: 0.62 }, N: { c: "#4f7dff", r: 0.58 }, O: { c: "#ff4d4d", r: 0.56 }, P: { c: "#ff9b3d", r: 0.85 } };
+function buildAtoms(t) {
+  const n = t.atomBp, mid = Math.floor(n / 2), seq = helixSeq(n);
+  const f = focusLetter(); seq[mid] = f || "A";
+  const D = buildBDNA(n, seq);
+  const L = newLevel(D.bp[mid].centre.clone());
+  Object.assign(L, { far: 46, near: 13, unit: 1e-10, parts: [] });
+  const seg = t.seg;
+  const sph = new THREE.SphereGeometry(1, seg, Math.round(seg * 0.7));
+  const mat = physical("#ffffff", { roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.12, envMapIntensity: 0.7 });
+  const atoms = new THREE.InstancedMesh(sph, mat, D.atoms.length);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3();
+  D.atoms.forEach((a, k) => {
+    const e = ELEM[a.el], hotA = a.bp === mid && a.part === "base";
+    m4.compose(a.p, q, v.setScalar(e.r * (hotA ? 1.08 : 1))); atoms.setMatrixAt(k, m4);
+    const c = lin(e.c); atoms.setColorAt(k, hotA ? c.multiplyScalar(1.9) : (a.part === "base" ? c : c.multiplyScalar(0.8)));
+  });
+  L.inner.add(atoms);
+  const cyl = new THREE.CylinderGeometry(1, 1, 1, Math.max(6, Math.round(seg * 0.45)), 1, true);
+  const bonds = new THREE.InstancedMesh(cyl, physical("#d5dbe2", { roughness: 0.3, clearcoat: 0.6 }), D.bonds.length);
+  const yAx = new THREE.Vector3(0, 1, 0);
+  D.bonds.forEach(([a, b], k) => {
+    const pa = D.atoms[a].p, pb = D.atoms[b].p, d = pb.clone().sub(pa), len = d.length();
+    q.setFromUnitVectors(yAx, d.normalize()); m4.compose(pa.clone().lerp(pb, 0.5), q, v.set(0.17, len, 0.17)); bonds.setMatrixAt(k, m4);
+  });
+  L.inner.add(bonds);
+  // hydrogen bonds: dashed glowing links between the two bases
+  const hp = [], hc = [], hs = [];
+  D.hbonds.forEach(([a, b, i]) => {
+    const pa = D.atoms[a].p, pb = D.atoms[b].p, hot = i === mid, c = lin(hot ? "#ffd27a" : "#7fd6ff");
+    for (let s = 1; s < 8; s++) { const p = pa.clone().lerp(pb, s / 8); hp.push(p.x, p.y, p.z); hc.push(c.r * (hot ? 1.6 : .5), c.g * (hot ? 1.6 : .5), c.b * (hot ? 1.6 : .5)); hs.push(hot ? 0.42 : 0.26); }
+  });
+  L.inner.add(glowPoints(hp, hc, hs, 1));
+  const b = D.bp[mid], nH = D.hbonds.filter(h => h[2] === mid).length;
+  L.info = { pair: `${b.b1}–${b.b2}`, nH, atoms: D.atoms.length, bonds: D.bonds.length };
+  L.labels = () => [
+    { local: b.c1[0].clone().multiplyScalar(1.35), text: b.b1 === "?" ? "?" : b.b1, cls: "big", w: [5.12, 6] },
+    { local: b.c1[1].clone().multiplyScalar(1.35), text: b.b2, cls: "big", w: [5.12, 6] },
+    { local: b.centre.clone().add(new THREE.Vector3(0, 0, 4.2)), text: `${nH} hydrogen bonds`, cls: "note", w: [5.2, 6] },
+  ];
+  return L;
+}
+
+const BUILDERS = [buildCell, buildNucleus, buildChromosome, buildChromatin, buildHelix, buildAtoms];
+function disposeGroup(g) { g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose()); }); g.parent && g.parent.remove(g); }
+function buildLevels(only) {
+  const t = TIERS[state.tierName];
+  BUILDERS.forEach((fn, i) => {
+    if (only && !only.includes(i)) return;
+    if (levels[i]) disposeGroup(levels[i].group);
+    levels[i] = finishLevel(fn(t), i);
+  });
+  updateTriangleBudget();
+}
+
+// ---------------------------------------------------------------- zoom maths
+const dAt = (L, u) => L.far * Math.pow(L.near / L.far, u - L.idx);
+function levelWeight(i, u) {
+  const fin = i === 0 ? 1 : smooth(i - 0.22, i + 0.02, u);
+  const fout = i === 5 ? 1 : 1 - smooth(i + 0.84, i + 1.04, u);
+  return fin * fout;
+}
+function applyFade(mats, w) {
+  mats.forEach(m => {
+    const base = m.userData.baseOpacity ?? 1;
+    if (m.uniforms && m.uniforms.uOpacity) { m.uniforms.uOpacity.value = base * w; return; }
+    m.opacity = base * w;
+    m.transparent = m.userData.baseTransparent || w < 0.995;
+    m.depthWrite = m.userData.baseDepthWrite && w > 0.6;
+  });
+}
+function updateLevels() {
+  const u = state.u;
+  levels.forEach((L, i) => {
+    const w = levelWeight(i, u);
+    L.group.visible = w > 0.003;
+    if (!L.group.visible) return;
+    const s = 1 / dAt(L, u);
+    L.group.scale.setScalar(s);
+    L.mats = L.mats || collectMats(L.group);
+    applyFade(L.mats, w);
+    (L.parts || []).forEach(p => { if (!p.out) return; const pw = w * (1 - smooth(p.out[0], p.out[1], u)); p.obj.visible = pw > 0.003; applyFade(p.mats, pw); });
+    L.group.traverse(o => { if (o.material && o.material.userData && o.material.userData.worldScaled) o.material.uniforms.uWorld.value = s; });
+  });
+}
+function collectMats(g) { const out = []; g.traverse(o => o.material && out.push(...(Array.isArray(o.material) ? o.material : [o.material]))); return [...new Set(out)]; }
+
+// ---------------------------------------------------------------- HUD text
+function fmtLen(m) {
+  if (m >= 1e-6) return `${+(m * 1e6).toPrecision(2)} µm`;
+  if (m >= 1e-9) return `${+(m * 1e9).toPrecision(2)} nm`;
+  return `${+(m * 1e10).toPrecision(2)} Å`;
+}
+function niceLen(m) { const p = Math.pow(10, Math.floor(Math.log10(m))), f = m / p; return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * p; }
+function levelCopy(i) {
+  const s = variant(), [chr, mb] = LOC[s.rsid], SL = strandLetters();
+  const pair = (b) => b && b !== "?" ? `${b}–${COMP[b]}` : "unknown";
+  const strandSentence = !SL.o
+    ? (SL.read === null ? `Your file has no call here (${esc(SL.g || "--")}), so there are no letters to check.` : `Your file says ${esc(SL.g)}, which matches neither strand. The report calls it an unexpected genotype.`)
+    : SL.o.flipped ? `Your file says <b>${esc(SL.g)}</b>. That is the − strand, so the analyzer reads the + strand instead: <b>${SL.fwd.join("")}</b>.`
+    : `Your file says <b>${esc(SL.g)}</b>, already on the + strand. No flip is needed.`;
+  return [
+    ["A human cell, about 20 µm across, among its neighbours. Your DNA sample was a few thousand cells like this one, collected in saliva.",
+     `Every cell holds a complete copy of your DNA. <b>Scroll, pinch or drag the slider</b> to dive into the nucleus.`],
+    [`The nucleus packs about 2 metres of DNA into a ball roughly 6 µm wide. Each of the 46 chromosomes keeps to its own territory.`,
+     `Glowing: <b>chromosome ${chr}</b>, which carries ${esc(s.rsid)} (${esc(s.gene)}).`],
+    [`Chromosome ${chr}, condensed the way it looks during cell division, with its light and dark bands. The pink pinch is the centromere.`,
+     `${esc(s.rsid)} sits at about <b>${Math.round(mb)} Mb</b>. A DNA chip tests about 600,000 spots like this; the analyzer keeps 21.`],
+    [`DNA winds 1.65 times around spools of eight histone proteins (nucleosomes), about 147 base pairs per spool, then runs on to the next.`,
+     `The gold spool is the stretch that holds ${esc(s.rsid)}. Zoom in to unwrap it.`],
+    [`Two strands about 2 nm across, one full turn every 10.5 base pairs. The wide and narrow gaps are the major and minor grooves.`,
+     strandSentence],
+    [`Your ${esc(s.rsid)} base pair from parent ${state.copy + 1}: <b>${pair(SL.fwd[state.copy])}</b>. Carbon grey, nitrogen blue, oxygen red, phosphorus orange; hydrogens are hidden.`,
+     `A–T pairs are held by 2 hydrogen bonds and G–C by 3 (gold dashes). DNA chips read your letter with probes that stick by this same pairing.`],
+  ][i];
+}
+let lastLevel = -1;
+function updateHud() {
+  const u = state.u, i = Math.min(5, Math.floor(u)), L = levels[i];
+  if (i !== lastLevel || hudDirty) {
+    lastLevel = i; hudDirty = false;
+    $("lvEyebrow").textContent = `Level ${i + 1} of 6 · ${LEVELS[i].eyebrow}`;
+    $("lvName").textContent = LEVELS[i].name;
+    const [a, b] = levelCopy(i); $("lvText").innerHTML = a; $("lvTie").innerHTML = b;
+    document.querySelectorAll("#ticks button").forEach((el, k) => el.classList.toggle("on", k === i));
+  }
+  // scale bar
+  const viewH = 2 * dAt(L, u) * Math.tan(camera.fov * Math.PI / 360) * L.unit;
+  const pxPerM = $("gl").clientHeight / viewH, bar = niceLen(viewH / 5);
+  $("sbBar").style.width = Math.round(bar * pxPerM) + "px"; $("sbText").textContent = fmtLen(bar);
+  const startH = 2 * levels[0].far * Math.tan(camera.fov * Math.PI / 360) * levels[0].unit;
+  const z = startH / viewH; $("zoomX").textContent = (z < 100 ? z.toFixed(1) : Math.round(z).toLocaleString()) + "×";
+  if (document.activeElement !== $("zoom")) $("zoom").value = u.toFixed(3);
+}
+let hudDirty = true;
+
+// ---------------------------------------------------------------- scene labels
+const labelEls = [];
+const vtmp = new THREE.Vector3();
+function placeLabels() {
+  const w = $("gl").clientWidth, h = $("gl").clientHeight; let n = 0;
+  if (state.mode === "zoom" && !state.hero) levels.forEach(L => {
+    if (!L.labels || !L.group.visible) return;
+    L.labels().forEach(lb => {
+      if (state.u < lb.w[0] || state.u > lb.w[1]) return;
+      vtmp.copy(lb.local); L.inner.localToWorld(vtmp); vtmp.project(camera);
+      if (vtmp.z > 1 || Math.abs(vtmp.x) > 1.05 || Math.abs(vtmp.y) > 1.05) return;
+      let el = labelEls[n]; if (!el) { el = document.createElement("div"); $("labels").appendChild(el); labelEls[n] = el; }
+      el.className = "tag " + (lb.cls || ""); el.textContent = lb.text; el.hidden = false;
+      el.style.left = ((vtmp.x + 1) / 2 * w) + "px"; el.style.top = ((1 - vtmp.y) / 2 * h) + "px";
+      const ch = lb.text.trim().slice(-1); el.style.color = lb.cls === "big" ? (BASECOL[ch] || "") : "";
+      n++;
+    });
+  });
+  for (let k = n; k < labelEls.length; k++) labelEls[k].hidden = true;
+}
+
+// ================================================================ genome particles
+const GENO_COL = { hom: lin("#5ab8ff"), het: lin("#ffb454"), nc: lin("#ff5a7a"), keep: lin("#ffffff") };
+function exampleGenome() {
+  // A synthetic file with realistic marker counts per chromosome.
+  const r = rng(2024), total = 600000;
+  const weights = CHROMS.map(c => c === "MT" ? 20 : c === "Y" ? 17.5 : c === "X" ? CHR_LEN.X * 0.6 : CHR_LEN[c]);
+  const ws = weights.reduce((a, b) => a + b, 0);
+  const counts = weights.map(w => Math.round(w / ws * (total - 21)));
+  const n = counts.reduce((a, b) => a + b, 0) + 21;
+  const g = { n, chrom: new Uint8Array(n), pos: new Float32Array(n), cls: new Uint8Array(n), keep: new Uint8Array(n), total: n, nocalls: 0, format: "Example (synthetic)" };
+  let k = 0;
+  counts.forEach((c, ci) => { for (let j = 0; j < c; j++) {
+    g.chrom[k] = ci; g.pos[k] = r() * CHR_LEN[CHROMS[ci]];
+    const x = r(); g.cls[k] = x < 0.03 ? 2 : x < 0.34 ? 1 : 0; if (g.cls[k] === 2) g.nocalls++; k++; } });
+  g.genos = new Map(); g.nocallSet = new Set(); g.ids = new Map();
+  Object.entries(SAMPLE).forEach(([id, gt]) => {
+    const [chr, mb] = LOC[id]; g.chrom[k] = CHROMS.indexOf(chr); g.pos[k] = mb; g.keep[k] = 1; g.ids.set(k, id);
+    if (isNoCall(gt)) { g.cls[k] = 2; g.nocalls++; g.nocallSet.add(id); } else { g.cls[k] = gt[0] === gt[1] ? 0 : 1; g.genos.set(id, gt); }
+    k++;
+  });
+  return g;
+}
+async function readDnaFile(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  if (buf[0] === 0x50 && buf[1] === 0x4b) return unzipLargest(buf);
+  if (buf[0] === 0x1f && buf[1] === 0x8b) return inflate(buf, "gzip");
+  return new TextDecoder().decode(buf);
+}
+async function inflate(bytes, fmt) {
+  if (!("DecompressionStream" in window)) throw new Error("This browser can't open compressed files. Unzip it first, then load the .txt file.");
+  const out = new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream(fmt)));
+  return new TextDecoder().decode(await out.arrayBuffer());
+}
+async function unzipLargest(b) {
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  let e = -1; for (let i = b.length - 22; i >= Math.max(0, b.length - 70000); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }
+  if (e < 0) throw new Error("That zip file looks damaged.");
+  let off = dv.getUint32(e + 16, true); const count = dv.getUint16(e + 10, true); let best = null;
+  for (let k = 0; k < count; k++) {
+    if (dv.getUint32(off, true) !== 0x02014b50) break;
+    const method = dv.getUint16(off + 10, true), csize = dv.getUint32(off + 20, true), usize = dv.getUint32(off + 24, true);
+    const nl = dv.getUint16(off + 28, true), xl = dv.getUint16(off + 30, true), cl = dv.getUint16(off + 32, true), lo = dv.getUint32(off + 42, true);
+    const name = new TextDecoder().decode(b.subarray(off + 46, off + 46 + nl));
+    if (!name.endsWith("/") && !name.startsWith("__MACOSX") && (!best || usize > best.usize)) best = { method, csize, usize, lo };
+    off += 46 + nl + xl + cl;
+  }
+  if (!best) throw new Error("That zip file is empty.");
+  const start = best.lo + 30 + dv.getUint16(best.lo + 26, true) + dv.getUint16(best.lo + 28, true);
+  const data = b.subarray(start, start + best.csize);
+  if (best.method === 0) return new TextDecoder().decode(data);
+  if (best.method === 8) return inflate(data, "deflate-raw");
+  throw new Error("That zip uses a compression method this page can't read.");
+}
+function parseGenome(text) {
+  const lines = text.split(/\r?\n/), n0 = lines.length;
+  const g = { chrom: new Uint8Array(n0), pos: new Float32Array(n0), cls: new Uint8Array(n0), keep: new Uint8Array(n0), n: 0, total: 0, nocalls: 0, genos: new Map(), nocallSet: new Set(), ids: new Map() };
+  const comments = []; let header = null;
+  for (const raw of lines) {
+    const line = raw.trim(); if (!line) continue;
+    if (line[0] === "#") { if (comments.length < 40) comments.push(line.toLowerCase()); continue; }
+    let f = line.includes("\t") ? line.split("\t") : line.includes(",") ? line.split(",") : line.split(/\s+/);
+    f = f.map(x => x.trim().replace(/^"|"$/g, ""));
+    if (["rsid", "rs id", "snp"].includes(f[0].toLowerCase())) { header = f.map(x => x.toLowerCase()); continue; }
+    if (f.length < 4) continue;
+    let chr = f[1].toUpperCase().replace(/^CHR/, "");
+    chr = { 23: "X", 24: "Y", 25: "X", 26: "MT", M: "MT", XY: "X" }[chr] || chr;
+    const ci = CHROMS.indexOf(chr);
+    let gt = (f.length >= 5 && (!header || header.includes("allele1")) ? f[3] + f[4] : f[3]).toUpperCase().replace(/\s/g, "");
+    g.total++;
+    const nc = isNoCall(gt);
+    if (nc) g.nocalls++;
+    const want = WANTED.has(f[0]);
+    if (want) { if (nc) g.nocallSet.add(f[0]); else g.genos.set(f[0], gt); }
+    if (ci < 0) continue;
+    const k = g.n++;
+    g.chrom[k] = ci; g.pos[k] = (parseFloat(f[2]) || 0) / 1e6; g.cls[k] = nc ? 2 : (gt.length === 2 && gt[0] !== gt[1] ? 1 : 0); g.keep[k] = want ? 1 : 0;
+    if (want) g.ids.set(k, f[0]);
+  }
+  if (!g.total) throw new Error("No genotype rows found. Is this a raw DNA file from 23andMe, AncestryDNA, MyHeritage or FamilyTreeDNA?");
+  const txt = comments.join(" ");
+  g.format = txt.includes("23andme") ? "23andMe" : (txt.includes("ancestrydna") || (header && header.includes("allele1"))) ? "AncestryDNA"
+    : txt.includes("myheritage") ? "MyHeritage" : txt.includes("familytreedna") ? "FamilyTreeDNA" : "Raw DNA file";
+  return g;
+}
+
+let genomeObj = null;
+const genomeUniforms = { uT: { value: 0 }, uPx: pxUniform, uScale: { value: 1 } };
+function buildGenomePoints(g) {
+  if (genomeObj) disposeGroup(genomeObj);
+  const t = TIERS[state.tierName];
+  // draw every marker when the device allows it, otherwise an even sample (always keeping the analysed 21)
+  const stride = Math.max(1, Math.ceil(g.n / t.particles));
+  const idx = []; for (let k = 0; k < g.n; k++) if (g.keep[k] || k % stride === 0) idx.push(k);
+  const N = idx.length, P = new Float32Array(N * 3), T = new Float32Array(N * 3), C = new Float32Array(N * 3), R = new Float32Array(N), K = new Float32Array(N);
+  const nC = CHROMS.length - 1, arc = 0.62, rad = 120, r = rng(9);
+  let kept = 0;
+  const keepIdx = idx.filter(k => g.keep[k]);
+  idx.forEach((k, j) => {
+    const ci = g.chrom[k], ch = CHROMS[ci], len = CHR_LEN[ch];
+    if (ch === "MT") {
+      // mitochondrial DNA is a small circle, drawn floating beside chromosome Y
+      const th = g.pos[k] / len * 6.283, rr = 3 + (r() - .5) * 0.6, a = arc * 1.12;
+      P[j * 3] = Math.sin(a) * rad + Math.cos(th) * rr; P[j * 3 + 1] = 14 + Math.sin(th) * rr; P[j * 3 + 2] = Math.cos(a) * rad - rad + (r() - .5) * 0.6;
+    } else {
+      const H = 6 + 54 * len / 249;
+      const a = (ci / (nC - 1) - 0.5) * 2 * arc, cx = Math.sin(a) * rad, cz = Math.cos(a) * rad - rad;
+      const y = (CENTRO[ch] / len - g.pos[k] / len) * H + 6;
+      const side = r() < 0.5 ? -1 : 1, pinch = 0.45 + 0.55 * smooth(0, 3, Math.abs(y - 6));
+      const rr = Math.sqrt(r()) * 0.75, th = r() * 6.283;
+      P[j * 3] = cx + Math.cos(a) * (side * 0.95 * pinch + Math.cos(th) * rr); P[j * 3 + 1] = y; P[j * 3 + 2] = cz - Math.sin(a) * (side * 0.95 * pinch) + Math.sin(th) * rr;
+    }
+    const c = g.keep[k] ? GENO_COL.keep : [GENO_COL.hom, GENO_COL.het, GENO_COL.nc][g.cls[k]];
+    const br = g.keep[k] ? 1 : ch === "MT" ? 0.12 : 0.32;
+    C[j * 3] = c.r * br; C[j * 3 + 1] = c.g * br; C[j * 3 + 2] = c.b * br;
+    R[j] = r(); K[j] = g.keep[k];
+    if (g.keep[k]) { const q = keptOrder(keepIdx.indexOf(k)); T[j * 3] = q.x; T[j * 3 + 1] = q.y; T[j * 3 + 2] = q.z; kept++; }
+  });
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(P, 3)); geo.setAttribute("aTarget", new THREE.BufferAttribute(T, 3));
+  geo.setAttribute("aColor", new THREE.BufferAttribute(C, 3)); geo.setAttribute("aRand", new THREE.BufferAttribute(R, 1)); geo.setAttribute("aKeep", new THREE.BufferAttribute(K, 1));
+  const mat = new THREE.ShaderMaterial({
+    uniforms: genomeUniforms,
+    vertexShader: `attribute vec3 aTarget; attribute vec3 aColor; attribute float aRand; attribute float aKeep;
+      uniform float uT, uPx, uScale; varying vec3 vC; varying float vA;
+      void main(){
+        vec3 p = position; float a = 1.0; vC = aColor;
+        if (aKeep > 0.5) {
+          float k = smoothstep(0.38, 0.95, uT);
+          p = mix(position, aTarget, k) + vec3(0.0, sin(k * 3.14159) * 14.0, 0.0);
+          vC = mix(aColor, vec3(1.6, 1.35, 0.9), smoothstep(0.05, 0.35, uT));
+        } else {
+          float k = clamp((uT - aRand * 0.42) / 0.22, 0.0, 1.0);
+          vec3 dir = normalize(vec3(sin(aRand * 91.7), cos(aRand * 47.3) + 0.4, sin(aRand * 13.1)));
+          p += dir * k * k * 22.0; a = 1.0 - k;
+        }
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        float s = aKeep > 0.5 ? 0.9 + 0.7 * smoothstep(0.1, 0.5, uT) : 0.26;
+        gl_PointSize = max(1.0, s * uScale * uPx / -mv.z);
+        gl_Position = projectionMatrix * mv; vA = a;
+      }`,
+    fragmentShader: `varying vec3 vC; varying float vA;
+      void main(){ float d = length(gl_PointCoord - 0.5); if (d > 0.5 || vA < 0.01) discard; float f = smoothstep(0.5, 0.05, d); gl_FragColor = vec4(vC * f * vA, 1.0); }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  genomeObj = new THREE.Group();
+  const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; genomeObj.add(pts);
+  // chromosome numbers
+  genomeObj.userData.labels = CHROMS.map((ch, ci) => {
+    if (ch === "MT") { const a = arc * 1.12; return { p: new THREE.Vector3(Math.sin(a) * rad, 8.5, Math.cos(a) * rad - rad), text: "MT" }; }
+    const a = (ci / (nC - 1) - 0.5) * 2 * arc; return { p: new THREE.Vector3(Math.sin(a) * rad, -26, Math.cos(a) * rad - rad), text: ch };
+  });
+  genomeObj.userData.keepLabels = keepIdx.map((k, i) => ({ p: keptOrder(i).add(new THREE.Vector3(0, -3.6, 0)), text: g.ids.get(k) || "" }));
+  const s = 1 / 165; genomeObj.scale.setScalar(s); genomeUniforms.uScale.value = s;
+  genomeObj.position.set(innerWidth > 900 ? 0.13 : 0, -0.03, 0.12);
+  genomeScene.add(genomeObj);
+  $("sTotal").textContent = g.total.toLocaleString();
+  $("sCall").textContent = ((g.total - g.nocalls) / g.total * 100).toFixed(1) + "%";
+  $("sShown").textContent = N.toLocaleString();
+  updateTriangleBudget();
+}
+function keptOrder(i) { const col = i % 7, row = Math.floor(i / 7); return new THREE.Vector3((col - 3) * 9, 24 - row * 9, 40); }
+function placeGenomeLabels() {
+  if (state.mode !== "genome" || !genomeObj || state.hero) return 0;
+  const w = $("gl").clientWidth, h = $("gl").clientHeight; let n = 0;
+  const lbs = genomeUniforms.uT.value > 0.97 ? genomeObj.userData.keepLabels : genomeObj.userData.labels;
+  lbs.forEach(lb => {
+    vtmp.copy(lb.p); genomeObj.localToWorld(vtmp); vtmp.project(camera);
+    if (vtmp.z > 1 || Math.abs(vtmp.x) > 1.02 || Math.abs(vtmp.y) > 1.02) return;
+    let el = labelEls[n]; if (!el) { el = document.createElement("div"); $("labels").appendChild(el); labelEls[n] = el; }
+    el.className = "tag note"; el.textContent = lb.text; el.hidden = false; el.style.color = "";
+    el.style.left = ((vtmp.x + 1) / 2 * w) + "px"; el.style.top = ((1 - vtmp.y) / 2 * h) + "px"; n++;
+  });
+  for (let k = n; k < labelEls.length; k++) labelEls[k].hidden = true;
+  return n;
+}
+function renderFindings() {
+  const g = state.genome; if (!g) return;
+  const { findings, hidden } = analyzeAll(g.genos, g.nocallSet, $("sens").checked);
+  const found = findings.filter(f => f.result).length;
+  $("findings").innerHTML = (hidden ? `<div class="status">${hidden} medical result${hidden > 1 ? "s" : ""} hidden. Tick “Show medical results” to see ${hidden > 1 ? "them" : "it"}.</div>` : "") +
+    findings.map(f => `<div class="find"><div class="h"><b>${esc(f.trait)}</b><span class="ev ${f.evidence}">${f.evidence}</span></div>
+      ${f.result ? `<div><code>${esc(f.geno)}</code> ${esc(f.result)}</div>` : `<small>${esc(f.status)}${f.geno ? " · " + esc(f.geno) : ""}</small>`}
+      <small>${esc(f.gene)} · ${esc(f.rsid)}</small></div>`).join("");
+  $("gText").textContent = `The analyzer kept 21 markers and found results for ${found} of the ${findings.length} shown.`;
+}
+
+// ================================================================ quality: measure and adapt
+let frames = [], settleUntil = 0, triedUp = {}, adjustments = 0;
+function setTier(name, rebuild = true) {
+  state.tierName = name;
+  if (rebuild) { buildLevels(); if (state.genome) buildGenomePoints(state.genome); }
+  resize();
+  frames = []; settleUntil = performance.now() + 1500;
+  updatePerf();
+}
+function measure(dt) {
+  if (state.hero || document.hidden) return;
+  const now = performance.now(); if (now < settleUntil) return;
+  frames.push(dt);
+  if (frames.length < 100) return;
+  const sorted = frames.slice().sort((a, b) => a - b), fps = 1 / sorted[Math.floor(sorted.length / 2)];
+  frames = [];
+  perfFps = fps; updatePerf();
+  if (!state.autoTier || adjustments > 4) return;
+  const i = TIER_ORDER.indexOf(state.tierName);
+  if (fps < 38 && i > 0) { adjustments++; setTier(TIER_ORDER[i - 1]); }
+  else if (fps > 56 && i < 3 && !triedUp[state.tierName]) { triedUp[state.tierName] = true; adjustments++; setTier(TIER_ORDER[i + 1]); }
+}
+let perfFps = 0, triBudget = 0;
+function updatePerf() {
+  const name = state.tierName[0].toUpperCase() + state.tierName.slice(1);
+  $("perf").innerHTML = `<b>${name}</b> · ${perfFps ? Math.round(perfFps) + " fps" : "measuring"}${state.autoTier ? " · auto" : ""}`;
+}
+function updateTriangleBudget() { triBudget = 1; }
+
+// ================================================================ frame loop
+function resize() {
+  const t = TIERS[state.tierName], w = innerWidth, h = innerHeight;
+  const pr = Math.min(devicePixelRatio || 1, state.hero ? t.heroPr : t.pr);
+  renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
+  composer.setPixelRatio(pr); composer.setSize(w, h);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  pxUniform.value = h * pr / (2 * Math.tan(camera.fov * Math.PI / 360));
+  bloom.enabled = t.bloom || state.hero;
+  bokeh.uniforms.aspect.value = w / h;
+  // r128's BokehPass and TAA hold buffer don't resize themselves
+  bokeh.renderTargetDepth.setSize(Math.round(w * pr), Math.round(h * pr));
+  if (taa.holdRenderTarget) { taa.holdRenderTarget.dispose(); taa.holdRenderTarget = undefined; }
+  taa.sampleLevel = state.hero ? 2 : t.ssaa;
+  if (state.hero) taa.accumulateIndex = -1;
+}
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (!state.hero) {
+    if (state.dive) { state.uTarget = Math.min(5.95, state.uTarget + dt * 0.2); if (state.uTarget >= 5.95) toggleDive(false); }
+    state.u += (state.uTarget - state.u) * Math.min(1, dt * (reduced ? 30 : 4));
+    if (state.running) { state.runT = Math.min(1, state.runT + dt / 6); genomeUniforms.uT.value = state.runT; if (state.runT >= 1) { state.running = false; renderFindings(); $("runBtn").textContent = "Reset"; } }
+  }
+  controls.update();
+  if (state.mode === "zoom") { updateLevels(); updateHud(); }
+  renderer.info.reset();
+  composer.render(dt);
+  if (state.mode === "zoom") placeLabels(); else placeGenomeLabels();
+  if (state.hero) {
+    const k = Math.max(0, taa.accumulateIndex), total = 32;
+    $("heroText").textContent = k >= total ? "Done. Take a screenshot." : `Rendering ${k} / ${total} samples`;
+    $("heroFill").style.width = Math.min(100, k / total * 100) + "%";
+  } else measure(dt);
+  if (state.mode === "zoom" && !state.hero) {
+    const tri = renderer.info.render.triangles;
+    $("triCount").innerHTML = `<b>${tri >= 1e6 ? (tri / 1e6).toFixed(1) + "M" : Math.round(tri / 1e3) + "k"}</b> triangles`;
+  }
+  requestAnimationFrame(loop);
+}
+
+// ================================================================ UI wiring
+function setMode(m) {
+  state.mode = m;
+  $("tabZoom").setAttribute("aria-selected", m === "zoom"); $("tabGenome").setAttribute("aria-selected", m === "genome");
+  $("notes").hidden = $("dock").hidden = m !== "zoom"; $("gpanel").hidden = m !== "genome";
+  taa.scene = bokeh.scene = m === "zoom" ? zoomScene : genomeScene;
+  if (m === "genome" && !state.genome) { state.genome = exampleGenome(); buildGenomePoints(state.genome); }
+  if (m === "genome") camera.position.set(0.1, 0.18, 1).setLength(1);
+  labelEls.forEach(el => el.hidden = true);
+}
+function toggleDive(on = !state.dive) {
+  state.dive = on; $("dive").textContent = on ? "Stop" : "Auto-dive"; $("dive").classList.toggle("on", on);
+  if (on && state.uTarget > 5.9) { state.u = state.uTarget = 0; }
+}
+function setHero(on) {
+  state.hero = on; document.getElementById("app").classList.toggle("hero-mode", on);
+  $("herobar").hidden = !on;
+  controls.autoRotate = !on && !reduced;
+  taa.accumulate = on; bokeh.enabled = on && state.mode === "zoom";
+  if (on && state.dive) toggleDive(false);
+  resize();
+}
+function initUi() {
+  LEVELS.forEach((L, i) => { const b = document.createElement("button"); b.type = "button"; b.textContent = L.name; b.onclick = () => { state.uTarget = i + 0.12; toggleDive(false); }; $("ticks").appendChild(b); });
+  SNPS.forEach((s, i) => { const o = document.createElement("option"); o.value = i; o.textContent = `${s.trait} · ${s.rsid}`; $("snp").appendChild(o); });
+  $("snp").value = state.snp;
+  $("zoom").oninput = e => { state.uTarget = +e.target.value; toggleDive(false); };
+  $("dive").onclick = () => toggleDive();
+  $("snp").onchange = e => { state.snp = +e.target.value; const s = variant(); state.geno = s.ref + s.alt; $("geno").value = state.geno; hudDirty = true; buildLevels([1, 2, 4, 5]); };
+  $("geno").oninput = e => { state.geno = e.target.value.toUpperCase(); hudDirty = true; buildLevels([4, 5]); };
+  $("copy").onchange = e => { state.copy = +e.target.value; hudDirty = true; buildLevels([4, 5]); };
+  $("tabZoom").onclick = () => setMode("zoom"); $("tabGenome").onclick = () => setMode("genome");
+  $("tier").onchange = e => { const v = e.target.value; state.autoTier = v === "auto"; adjustments = 0; triedUp = {}; if (v !== "auto") setTier(v); updatePerf(); };
+  $("heroBtn").onclick = () => setHero(true); $("heroExit").onclick = () => setHero(false);
+  addEventListener("keydown", e => { if (e.key === "Escape" && state.hero) setHero(false); });
+  controls.addEventListener("change", () => { if (state.hero) taa.accumulateIndex = -1; });
+  $("gl").addEventListener("wheel", e => { if (state.mode !== "zoom" || state.hero) return; e.preventDefault(); toggleDive(false); state.uTarget = clamp(state.uTarget - e.deltaY * 0.0016, 0, 5.999); }, { passive: false });
+  // two-finger pinch zoom
+  let pinch = null;
+  $("gl").addEventListener("touchstart", e => { if (e.touches.length === 2) pinch = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); }, { passive: true });
+  $("gl").addEventListener("touchmove", e => { if (e.touches.length !== 2 || pinch === null || state.mode !== "zoom") return; const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); state.uTarget = clamp(state.uTarget + Math.log(d / pinch) * 0.9, 0, 5.999); pinch = d; toggleDive(false); }, { passive: true });
+  $("gl").addEventListener("touchend", () => pinch = null, { passive: true });
+  $("runBtn").onclick = () => {
+    if (state.runT >= 1 || state.running) { state.running = false; state.runT = 0; genomeUniforms.uT.value = 0; $("runBtn").textContent = "Run the analyzer"; $("findings").innerHTML = ""; return; }
+    if (reduced) { state.runT = 1; genomeUniforms.uT.value = 1; renderFindings(); $("runBtn").textContent = "Reset"; return; }
+    state.running = true; $("runBtn").textContent = "Running…";
+  };
+  $("sens").onchange = () => renderFindings();
+  $("file").onchange = async e => {
+    const file = e.target.files[0]; if (!file) return;
+    $("gStatus").className = "status"; $("gStatus").textContent = `Reading ${file.name}…`;
+    try {
+      const text = await readDnaFile(file);
+      const g = parseGenome(text);
+      state.genome = g; state.runT = 0; genomeUniforms.uT.value = 0; $("runBtn").textContent = "Run the analyzer"; $("findings").innerHTML = "";
+      buildGenomePoints(g);
+      $("gEyebrow").textContent = `${g.format} · ${file.name}`;
+      $("gStatus").textContent = `Read ${g.total.toLocaleString()} markers inside this tab. Nothing was uploaded.`;
+    } catch (err) { $("gStatus").className = "status err"; $("gStatus").textContent = err.message; }
+    e.target.value = "";
+  };
+  addEventListener("resize", resize);
+}
+
+// ================================================================ boot
+if (window.THREE && THREE.OrbitControls && THREE.EffectComposer && THREE.TAARenderPass && THREE.RoomEnvironment) {
+  try {
+    initRenderer(); initUi(); buildLevels(); resize(); updatePerf();
+    state.geno = $("geno").value;
+    requestAnimationFrame(loop);
+  } catch (err) {
+    document.getElementById("app").insertAdjacentHTML("beforeend", `<div class="fallback">3D graphics couldn't start on this device (${esc(err.message)}).</div>`);
+  }
+} else {
+  document.getElementById("app").insertAdjacentHTML("beforeend", '<div class="fallback">The 3D libraries could not load. Check your internet connection and reload.</div>');
+}
+</script>
+
+</body>
+</html>
