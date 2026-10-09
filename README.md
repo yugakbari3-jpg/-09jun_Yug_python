@@ -47,17 +47,22 @@ Keep the `./` (or `.\`) in the `cd` command: the folder name starts with `-`.
 ## What it does
 
 - **Scan**: front photo plus optional side photos, by upload or live camera. The
-  camera checks lighting, sharpness, distance and face position as you go, and
-  can capture automatically.
+  camera checks lighting, sharpness, distance and face position as you go, shows
+  a live preview of detected spots on your face, and can capture automatically.
 - **Skin report**: skin score, active spots and dark marks by face zone, oiliness
-  and redness evenness, with the detections drawn on your photo.
+  and redness evenness. Switch the photo between Acne, Dark marks, Oiliness and
+  Redness maps.
 - **Breakout outlook**: an estimate for the next 7 days, with the factors behind it.
 - **Nutrition watch**: nutrients you may be low on, based on your food answers.
   Evidence labels are sourced in [EVIDENCE_NOTES.md](EVIDENCE_NOTES.md).
 - **Plan**: foods, habits and a skincare routine that respects pregnancy status
   and ingredients you react to.
-- **History**: score trend, scan-to-scan comparison and a hotspot map of where
-  spots keep appearing.
+- **History**: score trend, scan-to-scan comparison, a hotspot map of where
+  spots keep appearing, and an opt-in progress photo album with a before/after
+  slider or side-by-side view.
+- **Product check**: paste a product's ingredient list to see helpful acne
+  ingredients, possible pore-cloggers, irritants, anything you said you react to,
+  and retinoids if you may be pregnant. Save products to your shelf.
 - **Diary and Trigger Lab**: log sleep, stress, food and breakouts, then run a
   4–6 week personal test (for example, cutting dairy) with honest statistics.
 - **Doctor summary**: a printable overview to take to an appointment.
@@ -66,7 +71,9 @@ Keep the `./` (or `.\`) in the `cd` command: the folder name starts with `-`.
 
 - Accounts, results and diary entries are stored only on this computer, in
   `~/skinscope_data/skinscope_app.db` (set `SKINSCOPE_DIR` to change the folder).
-- Photos are analysed in memory and never saved; only numbers and spot positions
-  are kept.
+- Photos are analysed in memory and are not saved, unless you tick **Save my front
+  photo to my progress album** for a scan. Then a face-cropped photo is kept in the
+  local database so you can compare before and after. Delete any photo on the
+  History page; deleting a scan or your account deletes its photos too.
 - Passwords are stored as salted hashes.
 - The app makes no requests to outside services.

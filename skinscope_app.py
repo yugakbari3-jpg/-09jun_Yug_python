@@ -12,8 +12,10 @@ Needs (inside your virtual environment):
     pip install "opencv-python<5" numpy
 
 Privacy: accounts, photos and results stay on THIS computer. Photos are analysed in
-memory and never saved; only numbers and lesion positions are stored, in
-~/skinscope_data/skinscope_app.db. Passwords are stored as salted hashes.
+memory and are not saved, unless you turn on the progress album for a scan; then a cropped
+face photo is kept so you can compare before and after. Everything is stored in
+~/skinscope_data/skinscope_app.db and photos can be deleted at any time. Passwords are
+stored as salted hashes.
 
 Honesty: lesion detection is rule-based computer vision (not a trained neural network)
 and is not clinically validated. Photos cannot measure vitamin or mineral levels: the
@@ -156,6 +158,9 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, factor TEXT NOT NULL,
             start_ts REAL NOT NULL, days INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'active',
             stopped_ts REAL, adherence TEXT NOT NULL DEFAULT '{}');
+        CREATE TABLE IF NOT EXISTS photos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, scan_id INTEGER NOT NULL,
+            ts REAL NOT NULL, jpeg BLOB NOT NULL, meta TEXT NOT NULL DEFAULT '{}');
         """
     )
     DB.commit()
@@ -1823,7 +1828,63 @@ def api_check(user, payload):
     img = decode_image(payload.get("image"))
     sens = int(user["profile"].get("sens", 1))
     res = analyze_photo(img, sens if sens in SENS_TABLE else 1)
-    return {"found": res["found"], "notes": res.get("notes", []), "faces": res.get("faces", 0)}
+    out = {"found": res["found"], "notes": res.get("notes", []), "faces": res.get("faces", 0),
+           "w": res["w"], "h": res["h"]}
+    if res["found"]:
+        out["box"] = res.get("box")
+        out["lesions"] = [[round(l["x"]), round(l["y"]), round(l["r"], 1), l["t"]] for l in res.get("lesions", [])][:120]
+    return out
+
+
+PHOTO_W, PHOTO_H = 480, 600
+
+
+def save_progress_photo(uid, scan_id, ts, img, res):
+    """Keep a face-centred 4:5 crop for the opt-in progress album, with spot positions relative to the crop."""
+    H, W = img.shape[:2]
+    x, y, w, h = res["box"]
+    cx, cy = x + w / 2.0, y + h * 0.48
+    ch = max(h * 1.55, w * 1.55 * PHOTO_H / PHOTO_W)
+    cw = ch * PHOTO_W / PHOTO_H
+    x0, y0 = int(round(cx - cw / 2)), int(round(cy - ch / 2))
+    x1, y1 = x0 + int(round(cw)), y0 + int(round(ch))
+    pad = [max(0, -y0), max(0, y1 - H), max(0, -x0), max(0, x1 - W)]
+    if any(pad):
+        img = cv2.copyMakeBorder(img, pad[0], pad[1], pad[2], pad[3], cv2.BORDER_REPLICATE)
+        x0, x1, y0, y1 = x0 + pad[2], x1 + pad[2], y0 + pad[0], y1 + pad[0]
+    crop = cv2.resize(img[y0:y1, x0:x1], (PHOTO_W, PHOTO_H), interpolation=cv2.INTER_AREA)
+    ok, buf = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 86])
+    if not ok:
+        return None
+    ox, oy = x0 - pad[2], y0 - pad[0]
+    les = [[round((l["x"] - ox) / cw, 4), round((l["y"] - oy) / ch, 4), round(l["r"] / cw, 4), l["t"]]
+           for l in res.get("lesions", [])]
+    with DB_LOCK:
+        cur = DB.execute("INSERT INTO photos (user_id, scan_id, ts, jpeg, meta) VALUES (?, ?, ?, ?, ?)",
+                         (uid, scan_id, ts, buf.tobytes(), json.dumps({"lesions": les})))
+        DB.commit()
+    return cur.lastrowid
+
+
+def build_album(uid):
+    with DB_LOCK:
+        rows = DB.execute("SELECT p.id, p.scan_id, p.ts, p.meta, s.data FROM photos p LEFT JOIN scans s "
+                          "ON s.id = p.scan_id AND s.user_id = p.user_id WHERE p.user_id = ? ORDER BY p.ts, p.id",
+                          (uid,)).fetchall()
+    out = []
+    for r in rows:
+        d = json.loads(r["data"]) if r["data"] else {}
+        out.append({"id": r["id"], "scan_id": r["scan_id"], "ts": r["ts"], "lesions": json.loads(r["meta"]).get("lesions", []),
+                    "score": d.get("score"), "spots": d.get("spots_total"), "marks": d.get("marks_total")})
+    return {"photos": out}
+
+
+def photo_bytes(uid, pid):
+    with DB_LOCK:
+        row = DB.execute("SELECT jpeg FROM photos WHERE id = ? AND user_id = ?", (pid, uid)).fetchone()
+    if not row:
+        raise KeyError(pid)
+    return bytes(row["jpeg"])
 
 
 def api_scan(user, payload):
@@ -1834,15 +1895,17 @@ def api_scan(user, payload):
     sens = int(payload.get("sens", profile.get("sens", 1)))
     if sens not in SENS_TABLE:
         sens = 1
-    results, view_out = {}, {}
+    results, view_out, imgs = {}, {}, {}
     for view in VIEWS:
         if view in photos and photos[view]:
-            res = analyze_photo(decode_image(photos[view]), sens)
+            imgs[view] = decode_image(photos[view])
+            res = analyze_photo(imgs[view], sens)
             results[view] = res
             view_out[view] = {"found": res["found"], "notes": res.get("notes", []), "w": res["w"], "h": res["h"],
                               "box": res.get("box"), "lesions": [{"x": l["x"], "y": l["y"], "r": l["r"], "t": l["t"],
                                                                   "z": l["z"]} for l in res.get("lesions", [])],
-                              "zones": {z: q["box"] for z, q in res.get("zones", {}).items()}}
+                              "zones": {z: q["box"] for z, q in res.get("zones", {}).items()},
+                              "zinfo": {z: {"shine": q["shine"], "rel": q["rel"]} for z, q in res.get("zones", {}).items()}}
     front = results.get("front")
     if not front or not front["found"]:
         raise ValueError("No face found in the front photo. Use a straight-on, well-lit photo with your whole face "
@@ -1868,7 +1931,13 @@ def api_scan(user, payload):
             DB.execute("UPDATE users SET profile = ? WHERE id = ?", (json.dumps(prof), user["id"]))
         DB.commit()
         sid = cur.lastrowid
-    return {"id": sid, "views": view_out, "result": build_result(user["id"], sid)}
+    photo_id = None
+    if payload.get("save_photo"):
+        try:
+            photo_id = save_progress_photo(user["id"], sid, ts, imgs["front"], front)
+        except Exception as e:
+            print("Could not save the progress photo:", repr(e))
+    return {"id": sid, "views": view_out, "photo_id": photo_id, "result": build_result(user["id"], sid)}
 
 
 def api_profile(user, payload):
@@ -1885,6 +1954,15 @@ def api_profile(user, payload):
         prof["avoid"] = str(payload["avoid"])[:120]
     if "sens" in payload and int(payload["sens"]) in SENS_TABLE:
         prof["sens"] = int(payload["sens"])
+    if "save_photos" in payload:
+        prof["save_photos"] = bool(payload["save_photos"])
+    if isinstance(payload.get("products"), list):
+        items = []
+        for it in payload["products"][:40]:
+            if isinstance(it, dict) and str(it.get("name", "")).strip():
+                items.append({"name": str(it["name"]).strip()[:80], "text": str(it.get("text", ""))[:4000],
+                              "ts": float(it.get("ts") or time.time())})
+        prof["products"] = items
     if isinstance(payload.get("grocery"), dict):
         g = dict(prof.get("grocery", {}))
         for k, v in list(payload["grocery"].items())[:80]:
@@ -1950,11 +2028,13 @@ def api_breakout(user, payload):
 
 def api_delete(user, payload):
     kind, rid = payload.get("kind"), int(payload.get("id", 0))
-    table = {"scan": "scans", "breakout": "breakouts"}.get(kind)
+    table = {"scan": "scans", "breakout": "breakouts", "photo": "photos"}.get(kind)
     if not table:
         raise ValueError("bad kind")
     with DB_LOCK:
         DB.execute(f"DELETE FROM {table} WHERE id = ? AND user_id = ?", (rid, user["id"]))
+        if kind == "scan":
+            DB.execute("DELETE FROM photos WHERE scan_id = ? AND user_id = ?", (rid, user["id"]))
         DB.commit()
     return {"ok": True}
 
@@ -1977,7 +2057,7 @@ def api_delete_account(user, payload):
     if not row or not hmac.compare_digest(_hash(payload.get("password") or "", bytes(row["salt"])), bytes(row["pw_hash"])):
         raise ValueError("Incorrect password.")
     with DB_LOCK:
-        for t in ("scans", "diary", "breakouts", "reviews", "sessions", "experiments"):
+        for t in ("scans", "diary", "breakouts", "reviews", "sessions", "experiments", "photos"):
             DB.execute(f"DELETE FROM {t} WHERE user_id = ?", (uid,))
         DB.execute("DELETE FROM users WHERE id = ?", (uid,))
         DB.commit()
@@ -2079,6 +2159,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(build_lab(user))
             if url.path == "/api/summary":
                 return self._json(build_summary(user))
+            if url.path == "/api/album":
+                return self._json(build_album(user["id"]))
+            m = re.match(r"^/api/photo/(\d+)$", url.path)
+            if m:
+                return self._send(200, photo_bytes(user["id"], int(m.group(1))), "image/jpeg",
+                                  extra={"Content-Disposition": "inline"})
             m = re.match(r"^/api/scan/(\d+)$", url.path)
             if m:
                 return self._json(build_result(user["id"], int(m.group(1))))
@@ -2655,6 +2741,43 @@ body.entering #app{animation:appIn 1s .25s cubic-bezier(.2,.8,.2,1) both}
 .ld-cursor.drag .lbl{opacity:1}
 @media (pointer:fine){.ld-cursor.on{display:block}.ld.cur-on,.ld.cur-on a,.ld.cur-on button,.ld.cur-on #faceCloud{cursor:none}}
 @media (prefers-reduced-motion:reduce){.ld-hero .mega .ch{transform:none;animation:none}.rv{opacity:1;transform:none}}
+/* ---------- product check, album, camera overlay, concern maps ---------- */
+.seg{display:inline-flex;gap:3px;padding:4px;border-radius:12px;background:var(--surface2);border:1px solid var(--line)}
+.seg button{border:0;background:none;color:var(--muted);font:inherit;font-weight:700;font-size:13px;padding:6px 12px;border-radius:9px;cursor:pointer;transition:all .2s}
+.seg button.on{background:linear-gradient(120deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 6px 16px -8px var(--brand)}
+.ovmodes{margin-top:10px;flex-wrap:wrap}
+.pc-head{display:flex;gap:18px;align-items:center}
+.pc-gauge{position:relative;width:120px;flex:none}.pc-gauge svg{width:100%;display:block}
+.pc-gauge path{fill:none;stroke-width:10;stroke-linecap:round}.pc-gauge .tr{stroke:var(--track)}
+.pc-gauge .fg{stroke:var(--brand);animation:pcg 1.2s cubic-bezier(.2,.8,.2,1) both}.pc-gauge .fg.good{stroke:var(--good)}.pc-gauge .fg.warn{stroke:var(--warn)}.pc-gauge .fg.bad{stroke:var(--bad)}
+@keyframes pcg{from{stroke-dasharray:0 100}}
+.pc-gauge b{position:absolute;left:0;right:0;bottom:0;text-align:center;font-size:26px;font-weight:850;letter-spacing:-.03em}
+.pc-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:18px}
+.pc-grid h4{margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.pc-row{display:flex;flex-direction:column;align-items:flex-start;gap:3px;margin-bottom:10px}
+@media(max-width:900px){.pc-grid{grid-template-columns:1fr}}
+.shelf-item{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:10px 12px;margin:0 -12px;border-radius:12px;cursor:pointer;transition:background .2s}
+.shelf-item:hover{background:var(--surface2)}
+textarea{resize:vertical;min-height:120px;line-height:1.5}
+.ba{position:relative;width:100%;max-width:520px;margin:0 auto;aspect-ratio:4/5;border-radius:20px;overflow:hidden;background:#000;cursor:ew-resize;touch-action:none;user-select:none;box-shadow:var(--shadow);outline:none}
+.ba:focus-visible{box-shadow:0 0 0 3px var(--brand),var(--shadow)}
+.ba-img{position:absolute;inset:0}.ba-img img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.ba-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;filter:drop-shadow(0 0 3px rgba(0,0,0,.6))}
+.ba-top{clip-path:inset(0 calc(100% - var(--pos)) 0 0)}
+.ba-handle{position:absolute;top:0;bottom:0;left:var(--pos);width:3px;margin-left:-1.5px;background:#fff;box-shadow:0 0 18px rgba(139,108,255,.9);pointer-events:none}
+.ba-handle i{position:absolute;top:50%;left:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-weight:900;color:#fff;background:linear-gradient(135deg,var(--brand),var(--brand2));box-shadow:0 8px 24px -6px rgba(0,0,0,.6)}
+.ba-tag{position:absolute;top:12px;padding:5px 11px;border-radius:99px;font-size:12px;color:#fff;background:rgba(10,8,24,.7);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.18);pointer-events:none}
+.ba-tag.l{left:12px}.ba-tag.r{right:12px}
+.ba-side{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:760px;margin:0 auto}
+.ba-side .ba-img{position:relative;aspect-ratio:4/5;border-radius:18px;overflow:hidden;background:#000}
+.thumbs{display:flex;gap:10px;overflow-x:auto;padding:14px 2px 4px}
+.thumb{position:relative;flex:none;width:84px;text-align:center;font-size:11px;color:var(--muted)}
+.thumb img{width:84px;height:105px;object-fit:cover;border-radius:12px;display:block;cursor:pointer;border:2px solid transparent;transition:border-color .2s,transform .2s}
+.thumb img:hover{transform:translateY(-2px)}.thumb.on img{border-color:var(--brand)}
+.thumb .x{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(10,8,24,.7);color:#fff;cursor:pointer;opacity:0;transition:opacity .2s}
+.thumb:hover .x{opacity:1}
+#camAR{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
+.cam-live{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;font-size:12.5px;color:#c9c4e6;min-height:30px}
 </style></head>
 <body>
 <div id="intro" aria-hidden="true" data-act="introSkip">
@@ -2691,6 +2814,7 @@ body.entering #app{animation:appIn 1s .25s cubic-bezier(.2,.8,.2,1) both}
   <div class="cam-top"><div><b id="camTitle">Front photo</b><div class="tiny" id="camSub"></div></div><button class="btn icon" data-act="camClose" title="Close camera">&times;</button></div>
   <div class="cam-stage">
    <video id="camVideo" playsinline muted autoplay></video>
+   <canvas id="camAR"></canvas>
    <svg class="cam-guide" viewBox="0 0 400 500" preserveAspectRatio="none" aria-hidden="true">
     <defs><mask id="camMask"><rect width="400" height="500" fill="#fff"/><ellipse cx="200" cy="245" rx="132" ry="178" fill="#000"/></mask>
      <linearGradient id="camG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c4b5fd"/><stop offset=".5" stop-color="#ff8cc6"/><stop offset="1" stop-color="#67e8f9"/></linearGradient></defs>
@@ -2706,6 +2830,7 @@ body.entering #app{animation:appIn 1s .25s cubic-bezier(.2,.8,.2,1) both}
    <div class="cam-err" id="camErr"><div id="camErrMsg"></div><button class="btn p" data-act="camUpload">Upload a photo instead</button></div>
   </div>
   <div class="cam-checks" id="camChecks"></div>
+  <div class="cam-live"><label class="opt"><input type="checkbox" id="camLive" checked> Live spot preview</label><span id="camLiveCount"></span></div>
   <div class="cam-ctl"><label class="opt"><input type="checkbox" id="camAuto" checked> Auto-capture</label><button class="shutter" data-act="camShoot" title="Take photo now" aria-label="Take photo now"></button><button class="btn sm" data-act="camFlip">Switch camera</button></div>
   <div class="tiny cam-foot">Live checks run on this computer. Nothing is saved until you press Analyse.</div>
  </div>
@@ -2753,6 +2878,7 @@ const ICONS={
   diary:'<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/>',
   lab:'<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"/><path d="M7.5 15h9"/>',
   insights:'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16.5l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6z"/>',
+  products:'<path d="M9 3h6v3l1.5 2.2a3 3 0 0 1 .5 1.7V19a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V9.9a3 3 0 0 1 .5-1.7L9 6z"/><path d="M7.5 13h9"/>',
   camera:'<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/>',
   moon:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
   sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
@@ -2952,7 +3078,7 @@ function tplAuth(){
    <div class="ld-marquee two mega" data-speed="-0.7">${mq(['Acne','Dark marks','Oiliness','Breakouts','Nutrition'])}</div>
    <section class="ld-sec" id="ld-how"><div class="ld-kick rv">How it works</div>
     <div class="ld-feat"><div><span class="num mega rv">01</span><h3 class="mega rv d1">Snap a <em>selfie</em></h3><p class="rv d2">Use your camera or upload a photo. Live checks tell you when the light, focus and distance are right, then it takes the photo for you.</p>
-      <ul class="rv d3"><li>Front and side views</li><li>Auto-capture when the photo is good</li><li>Photos are never saved</li></ul></div><div class="vis rv d1">${scanArt()}</div></div>
+      <ul class="rv d3"><li>Front and side views</li><li>Auto-capture when the photo is good</li><li>Photos kept only if you choose</li></ul></div><div class="vis rv d1">${scanArt()}</div></div>
     <div class="ld-feat"><div><span class="num mega rv">02</span><h3 class="mega rv d1">Get your <em>score</em></h3><p class="rv d2">Active spots and dark marks counted across five face zones, plus oiliness, redness evenness and a 7-day breakout outlook.</p>
       <ul class="rv d3"><li>Spots drawn on your photo</li><li>Check the detections yourself</li><li>A nutrition watch-list backed by research notes</li></ul></div><div class="vis rv d1">${ring(86,150)}</div></div>
     <div class="ld-feat"><div><span class="num mega rv">03</span><h3 class="mega rv d1">Track <em>progress</em></h3><p class="rv d2">Scan every week. Watch your score trend, see your hotspots, and test your own triggers in the Trigger Lab with honest statistics.</p>
@@ -2961,7 +3087,7 @@ function tplAuth(){
    <div class="ld-stats" id="ld-privacy">
     <div class="rv"><div class="big mega"><span data-count="5">5</span></div><div class="lab">Face zones analysed</div></div>
     <div class="rv d1"><div class="big mega"><span data-count="7">7</span></div><div class="lab">Nutrients on the watch-list</div></div>
-    <div class="rv d2"><div class="big mega"><span data-count="0">0</span></div><div class="lab">Photos ever stored</div></div>
+    <div class="rv d2"><div class="big mega"><span data-count="0">0</span></div><div class="lab">Photos sent to the internet</div></div>
     <div class="rv d3"><div class="big mega"><span data-count="100">100</span><sup>%</sup></div><div class="lab">On your own computer</div></div></div>
    <section class="ld-sec ld-join" id="ldJoin"><div><div class="ld-kick rv">Free, private, yours</div><h2 class="mega rv d1">Ready to<em>start?</em></h2>
      <p class="rv d2" style="color:var(--ld-mut);max-width:440px;font-size:16px">Your account and results stay on this computer. SkinScope is an information tool, not a medical device or diagnosis.</p></div>
@@ -3055,7 +3181,7 @@ function stopLanding(){if(!LD)return;cancelAnimationFrame(LD.raf);(LD.on||[]).fo
 
 /* ---------- shell ---------- */
 function shell(active,inner){
-  const nav=[['home','Home'],['scan','Scan'],['results','Results'],['history','History'],['diary','Diary'],['lab','Lab'],['insights','Insights']];
+  const nav=[['home','Home'],['scan','Scan'],['results','Results'],['history','History'],['products','Products'],['diary','Diary'],['lab','Lab'],['insights','Insights']];
   return `<div class="top"><span class="logo" data-act="go" data-to="home">${LOGO}<span>SkinScope</span></span>
     <div class="nav">${nav.map(([k,l])=>`<a href="#/${k}" class="${active===k?'on':''}" title="${l}">${ic(k)}<span>${l}</span></a>`).join('')}</div>
     <div class="me">${themeBtn()}<a href="#/profile" title="Profile"><span class="avatar">${esc((me.name||'?').trim().charAt(0).toUpperCase()||'?')}</span><span class="nm">${esc(me.name)}</span></a><button class="btn sm" data-act="logout">Sign out</button></div></div>
@@ -3113,9 +3239,10 @@ function tplScan(){
   const ready=!!sc.photos.front&&sc.checks.front&&sc.checks.front.found;
   return `<h2>Skin scan</h2><p class="muted">Step 1: add your photos. Step 2: answer a few quick questions. Step 3: analyse.</p>
   <div class="card"><h3>1. Add your photos</h3><div class="slots" id="slots">${VIEWS_ORDER.map(slotHtml).join('')}</div>
-    <p class="small muted" style="margin-top:10px">The front photo is required. The side photos are optional and help count spots on each cheek. Photos are analysed on this computer and never saved.</p></div>
+    <p class="small muted" style="margin-top:10px">The front photo is required. The side photos are optional and help count spots on each cheek. Photos are analysed on this computer and are not saved unless you turn on the progress album below.</p></div>
   <div class="card"><h3>2. Quick questions <span class="chip grey">recommended</span></h3><p class="small muted">These power your breakout outlook and nutrition watch-list. Without the food answers, the nutrition section stays locked.</p><div id="qform">${tplQuestions()}</div></div>
-  <div class="card"><div class="row"><button class="btn p big" id="analyzeBtn" data-act="analyze" ${ready?'':'disabled'}>3. Analyse my skin</button><span class="small muted" id="analyzeHint">${ready?'':'Add a clear front photo to continue.'}</span></div></div>
+  <div class="card"><div class="row"><button class="btn p big" id="analyzeBtn" data-act="analyze" ${ready?'':'disabled'}>3. Analyse my skin</button><span class="small muted" id="analyzeHint">${ready?'':'Add a clear front photo to continue.'}</span></div>
+    <label class="checkrow" style="margin-top:12px"><input type="checkbox" id="savePhoto" data-act="savePhotoPref" ${me.profile.save_photos?'checked':''}><span><b>Save my front photo to my progress album</b><span class="small muted" style="display:block">Lets you compare before and after on the History page. Kept only on this computer, as a face crop. Delete it any time.</span></span></label></div>
   ${tplInstructions()}`;
 }
 const VIEWS_ORDER=['front','right','left'];
@@ -3139,7 +3266,7 @@ function tplInstructions(){
       <li>Wide-angle selfies close to the face distort the cheeks.</li>
       <li>On iPhone, turn off Settings, Camera, Mirror Front Camera so left and right stay correct.</li>
       <li>If Chrome cannot open an iPhone HEIC photo, use Safari or set Camera, Formats to Most Compatible.</li></ul></div></div>
-   <div class="note info small">Privacy: photos are processed in memory on this computer and are not stored. Only numbers and spot positions are kept.</div></div>`;
+   <div class="note info small">Privacy: photos are processed on this computer. Only numbers and spot positions are kept, plus a face photo if you turn on the progress album.</div></div>`;
 }
 async function loadPhotoFile(view,file){
   if(!file||!file.type.startsWith('image/')){toast('Please choose an image file');return;}
@@ -3164,7 +3291,7 @@ async function doAnalyze(){
     const q={};for(const k in sc.q){if(sc.q[k]!==undefined&&sc.q[k]!==null)q[k]=sc.q[k];}
     for(const s of cfg.questions){if(q[s.key]===undefined&&s.default!==undefined&&s.type!=='freq')q[s.key]=s.default;}
     const photos={};for(const v of VIEWS_ORDER){if(sc.photos[v])photos[v]=sc.photos[v];}
-    const out=await api('/api/scan',{photos,q});
+    const sp=$('#savePhoto');const out=await api('/api/scan',{photos,q,save_photo:!!(sp&&sp.checked)});
     mem[out.id]={views:out.views,canvases:{...sc.canvases}};
     me.profile.last_q={...me.profile.last_q,...q};
     sc={photos:{},canvases:{},checks:{},q:{...me.profile.last_q}};
@@ -3200,7 +3327,7 @@ async function camStart(){
   }
 }
 function camStop(){if(cam&&cam.stream){cam.stream.getTracks().forEach(t=>t.stop());cam.stream=null;}}
-function closeCam(){if(!cam)return;cam.alive=false;clearTimeout(cam.timer);clearInterval(cam.cd);camStop();const v=$('#camVideo');if(v)v.srcObject=null;cam=null;$('#cam').classList.remove('on');}
+function closeCam(){if(!cam)return;camAR(null);cam.alive=false;clearTimeout(cam.timer);clearInterval(cam.cd);camStop();const v=$('#camVideo');if(v)v.srcObject=null;cam=null;$('#cam').classList.remove('on');}
 function camFrame(maxW){const v=$('#camVideo');let w=v.videoWidth,h=v.videoHeight;if(!w||!h)return null;if(w>maxW){h=Math.round(h*maxW/w);w=maxW;}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(v,0,0,w,h);return c;}
 async function camLoop(){
   if(!cam||!cam.alive)return;
@@ -3214,7 +3341,7 @@ async function camLoop(){
 function camJudge(r){
   const notes=r.notes||[],n=notes.join(' ').toLowerCase(),f=!!r.found;
   const st=f?{face:true,light:!/too dark|too bright/.test(n),even:!/uneven/.test(n),sharp:!/blurry/.test(n),dist:!/too small/.test(n)}:{face:false};
-  camChips(st);
+  camChips(st);camAR(r);
   const ok=f&&!notes.length;cam.good=ok?cam.good+1:0;
   if(!f)camSet('warn','Looking for your face... centre it in the oval');
   else if(!ok)camSet('warn',notes[0]);
@@ -3252,7 +3379,7 @@ function tplResults(r){
      <div class="row" style="gap:24px">${ring(s.overall,150)}<div><h2 style="margin:0">${esc(s.grade)}</h2><p class="muted small" style="margin:4px 0">Skin type estimate: <b>${esc(s.skin_type)}</b></p>
       <div class="row"><span class="chip">${r.counts.spots} active spots</span><span class="chip grey">${r.counts.marks} dark marks</span></div></div></div>
      <div class="bars" style="margin-top:18px">${r.concerns.map(c=>`<div>${bar(c.label,c.score)}<div class="tiny muted" style="margin:-4px 0 0 130px">${esc(c.detail)}</div></div>`).join('')}</div></div>
-    <div>${views.length?`<div class="row" style="margin-bottom:8px">${views.map((v,i)=>`<button class="btn sm ${i?'':'p'}" data-act="showView" data-v="${v}" data-id="${id}">${esc(VIEW_INFO[v].name)}</button>`).join('')}</div><canvas id="ovcanvas"></canvas><div class="legend" style="margin-top:6px"><span><span class="dot" style="background:${LT.i}"></span>inflamed</span><span><span class="dot" style="background:${LT.p}"></span>pustule-like</span><span><span class="dot" style="background:${LT.m}"></span>dark mark</span></div><div class="row noprint" style="margin-top:8px"><button class="btn sm" data-act="openReview" data-id="${id}">Check detections</button></div>`:lesionMap(r.scan.lesions)}
+    <div>${views.length?`<div class="row" style="margin-bottom:8px">${views.map((v,i)=>`<button class="btn sm ${i?'':'p'}" data-act="showView" data-v="${v}" data-id="${id}">${esc(VIEW_INFO[v].name)}</button>`).join('')}</div><canvas id="ovcanvas"></canvas><div class="seg ovmodes">${OV_MODES.map(([k,l])=>`<button data-act="ovMode" data-m="${k}" class="${ovMode===k?'on':''}">${l}</button>`).join('')}</div><p class="tiny muted" id="ovHelp" style="margin:6px 0 0">${OV_HELP[ovMode]}</p><div class="legend" style="margin-top:6px"><span><span class="dot" style="background:${LT.i}"></span>inflamed</span><span><span class="dot" style="background:${LT.p}"></span>pustule-like</span><span><span class="dot" style="background:${LT.m}"></span>dark mark</span></div><div class="row noprint" style="margin-top:8px"><button class="btn sm" data-act="openReview" data-id="${id}">Check detections</button></div>`:lesionMap(r.scan.lesions)}
      ${m?Object.entries(m.views).filter(([v,x])=>!x.found).map(([v])=>`<p class="tiny muted">${esc(VIEW_INFO[v].name)}: no face found, not used.</p>`).join(''):''}</div></div>
     <table style="margin-top:14px"><thead><tr><th>Zone</th><th>Active spots</th><th>Dark marks</th><th>Shine</th></tr></thead><tbody>${Object.entries(r.counts.by_zone).map(([z,v])=>`<tr><td><span class="dot" style="background:${ZC[z]}"></span>${esc(cfg.labels[z])}</td><td>${v.spots}</td><td>${v.marks}</td><td>${v.shine.toFixed(1)}%</td></tr>`).join('')}</tbody></table>
     <p class="tiny muted">${r.scan.detector==='model'?'Active spots are found by a trained detection model and dark marks by colour rules.':'Detection is rule-based.'} Either can miss faint spots or mistake freckles, moles or irritation for lesions. Use Check detections to see how well it does on your face.</p></div>
@@ -3297,16 +3424,161 @@ function tplResults(r){
     <a href="#/history">Open full history and compare scans</a></div>
    <p class="tiny muted">SkinScope is an information tool, not a medical device or diagnosis. Talk to a doctor about any skin or health concern.</p>`;
 }
-function drawOverlay(id,view){
+/* ---------- product ingredient checker ---------- */
+const ING={
+  good:[
+    [/salicylic acid|\bbha\b|betaine salicylate/,'Salicylic acid','Unclogs pores and helps blackheads.'],
+    [/benzoyl peroxide/,'Benzoyl peroxide','Kills acne bacteria and calms inflamed spots.'],
+    [/adapalene|tretinoin|retinoic acid|tazarotene/,'Prescription-type retinoid','Helps prevent new spots. Strong: use as directed.'],
+    [/\bretinol\b|retinal\b|retinaldehyde|hydroxypinacolone retinoate/,'Retinoid (retinol family)','Speeds skin renewal and can help clogged pores over time.'],
+    [/azelaic acid/,'Azelaic acid','Helps spots and dark marks; usually gentle.'],
+    [/niacinamide/,'Niacinamide','Can help oiliness, redness and marks.'],
+    [/\bsulfur\b|\bsulphur\b/,'Sulfur','Dries out spots; gentle option for some people.'],
+    [/glycolic acid|lactic acid|mandelic acid/,'AHA exfoliant','Exfoliates the surface and can help marks fade.'],
+    [/zinc (pca|gluconate|sulfate)/,'Zinc salt','May help oil control.'],
+    [/melaleuca alternifolia|tea tree/,'Tea tree oil','Some evidence for mild acne, but can irritate.']],
+  clog:[
+    [/isopropyl myristate/,'Isopropyl myristate'],[/isopropyl palmitate/,'Isopropyl palmitate'],[/isopropyl isostearate/,'Isopropyl isostearate'],
+    [/isostearyl isostearate/,'Isostearyl isostearate'],[/myristyl myristate/,'Myristyl myristate'],[/myristyl lactate/,'Myristyl lactate'],
+    [/cocos nucifera|coconut oil/,'Coconut oil'],[/theobroma cacao|cocoa butter/,'Cocoa butter'],[/triticum vulgare.*germ oil|wheat germ oil/,'Wheat germ oil'],
+    [/acetylated lanolin/,'Acetylated lanolin'],[/laureth-4\b/,'Laureth-4'],[/oleth-3\b/,'Oleth-3'],[/\balgae\b|algae extract/,'Algae extract'],
+    [/carrageenan/,'Carrageenan'],[/isocetyl stearate/,'Isocetyl stearate'],[/(ethylhexyl|octyl) stearate/,'Ethylhexyl stearate'],
+    [/butyl stearate/,'Butyl stearate'],[/decyl oleate/,'Decyl oleate'],[/linum usitatissimum|linseed oil|flaxseed oil/,'Linseed oil'],
+    [/glycine soja|soybean oil/,'Soybean oil'],[/\boleic acid\b/,'Oleic acid'],[/d&c red|red \d+ lake/,'Red dye (D&C red)']],
+  irr:[
+    [/\bparfum\b|\bfragrance\b|\baroma\b/,'Fragrance'],[/alcohol denat|sd alcohol|denatured alcohol/,'Drying alcohol'],
+    [/linalool|limonene|citral|geraniol|eugenol|citronellol|coumarin/,'Fragrance allergen'],
+    [/lavandula|lavender oil|mentha piperita|peppermint oil|eucalyptus|citrus .*oil|bergamot|lemon peel oil/,'Essential oil'],
+    [/\bmenthol\b|camphor/,'Menthol / camphor'],[/methylisothiazolinone|methylchloroisothiazolinone/,'Strong preservative allergen'],
+    [/sodium lauryl sulfate/,'Sodium lauryl sulfate']],
+  preg:[/adapalene|tretinoin|retinoic acid|tazarotene|\bretinol\b|retinal\b|retinaldehyde|retinyl|hydroxypinacolone retinoate/]
+};
+function splitIngredients(t){return String(t||'').toLowerCase().replace(/\([^)]*\)/g,m=>m.replace(/,/g,' ')).split(/[,;\n•·]+/).map(x=>x.replace(/[*†.]+/g,'').replace(/^\s*(ingredients|inci)\s*:?/,'').trim()).filter(x=>x.length>1).slice(0,120);}
+function checkProduct(text){
+  const list=splitIngredients(text),hit=(rx)=>list.find(i=>rx.test(i)),uniq=a=>[...new Map(a.map(x=>[x[0],x])).values()];
+  const good=uniq(ING.good.filter(([rx])=>hit(rx)).map(([rx,n,w])=>[n,w]));
+  const clog=uniq(ING.clog.map(([rx,n])=>{const i=list.findIndex(x=>rx.test(x));return i<0?null:[n,i];}).filter(Boolean));
+  const irr=uniq(ING.irr.filter(([rx])=>hit(rx)).map(([rx,n])=>[n]));
+  const avoidWords=String((me&&me.profile.avoid)||'').toLowerCase().split(/[,;]+/).map(w=>w.trim()).filter(w=>w.length>2);
+  const mine=avoidWords.filter(w=>list.some(i=>i.includes(w)));
+  const preg=ING.preg.some(rx=>list.some(i=>rx.test(i)))&&me&&me.profile.pregnancy!=='no';
+  const highClog=clog.filter(c=>c[1]<Math.max(6,list.length*.4)).length;
+  let score=70+good.length*8-clog.length*9-highClog*6-irr.length*6-mine.length*25;score=Math.max(5,Math.min(98,score));
+  if(!list.length)score=0;
+  const verdict=!list.length?['Paste an ingredient list','grey']:(mine.length||score<45)?['May not suit acne-prone skin','bad']:score<70?['Use with care','warn']:['Looks acne-friendly','good'];
+  return {n:list.length,good,clog,irr,mine,preg,score,verdict};
+}
+function tplCheck(r,name){
+  if(!r.n) return `<div class="note info">Paste the ingredient list from the back of the pack or the brand's website, then press Check.</div>`;
+  const chip=(t,c)=>`<span class="chip ${c}">${esc(t)}</span>`;
+  return `<div class="pc-head"><div class="pc-gauge" style="--v:${r.score}"><svg viewBox="0 0 120 70"><path d="M10 64a50 50 0 0 1 100 0" pathLength="100" class="tr"/><path d="M10 64a50 50 0 0 1 100 0" pathLength="100" class="fg ${r.verdict[1]}" style="stroke-dasharray:${r.score} 100"/></svg><b data-count="${r.score}">${r.score}</b></div>
+     <div><div class="tiny muted">${esc(name||'This product')} &middot; ${r.n} ingredients read</div><h3 style="margin:4px 0 6px">${esc(r.verdict[0])}</h3>${r.preg?'<div class="chip bad" style="margin-right:6px">Contains a retinoid</div>':''}${r.mine.length?`<div class="chip bad">Contains something you react to</div>`:''}</div></div>
+    ${r.mine.length?`<div class="note bad" style="margin-top:14px"><b>You told us you react to:</b> ${r.mine.map(esc).join(', ')}.</div>`:''}
+    ${r.preg?`<div class="note bad" style="margin-top:10px">Retinoids are usually avoided in pregnancy, when planning a pregnancy or breastfeeding. Check with a doctor or pharmacist.</div>`:''}
+    <div class="pc-grid">
+     <div><h4>Helpful for acne</h4>${r.good.length?r.good.map(([n,w])=>`<div class="pc-row"><span class="chip good">${esc(n)}</span><span class="small muted">${esc(w)}</span></div>`).join(''):'<p class="small muted">No common acne-fighting ingredients found.</p>'}</div>
+     <div><h4>May clog pores for some people</h4>${r.clog.length?r.clog.map(([n,i])=>`<div class="pc-row">${chip(n,i<6?'warn':'grey')}<span class="small muted">${i<6?'near the top of the list (higher amount)':'further down the list'}</span></div>`).join(''):'<p class="small muted">None of the usual suspects found.</p>'}</div>
+     <div><h4>Possible irritants</h4>${r.irr.length?r.irr.map(([n])=>`<div class="pc-row">${chip(n,'warn')}</div>`).join(''):'<p class="small muted">No common irritants found.</p>'}</div>
+    </div>
+    <p class="tiny muted" style="margin-top:14px">"Pore-clogging" ratings come mostly from older lab tests; how a finished product behaves depends on the formula and amount. Patch test new products and change one thing at a time.</p>`;
+}
+let pcState={name:'',text:'',res:null};
+function tplProducts(){
+  const shelf=(me.profile.products||[]).slice().reverse();
+  return `<h2>Product check</h2><p class="muted" style="margin-top:0">Paste the ingredients from any skincare or makeup product to see what may help or upset acne-prone skin.</p>
+   <div class="grid g21"><div class="card"><label class="f">Product name</label><input type="text" id="pcName" maxlength="80" placeholder="e.g. Daily gel moisturiser" value="${esc(pcState.name)}">
+     <label class="f">Ingredient list</label><textarea id="pcText" rows="6" placeholder="Aqua, Glycerin, Niacinamide, ...">${esc(pcState.text)}</textarea>
+     <div class="row" style="margin-top:12px"><button class="btn p" data-act="pcCheck">Check ingredients</button><button class="btn" data-act="pcSave" ${pcState.res&&pcState.res.n?'':'disabled'}>Save to my shelf</button><button class="btn sm" data-act="pcSample">Try an example</button></div>
+     <div id="pcOut" style="margin-top:18px">${pcState.res?tplCheck(pcState.res,pcState.name):''}</div></div>
+    <div class="card"><h3>My shelf</h3><p class="small muted">Products you have checked. Click one to see it again.</p>
+     ${shelf.length?shelf.map((p,i)=>{const r=checkProduct(p.text);return `<div class="shelf-item" data-act="pcOpen" data-i="${shelf.length-1-i}"><div><b>${esc(p.name)}</b><div class="tiny muted">${fmtDate(p.ts)}</div></div><span class="chip ${r.verdict[1]}">${esc(r.verdict[0])}</span><button class="btn sm danger" data-act="pcDel" data-i="${shelf.length-1-i}" title="Remove">&times;</button></div>`;}).join(''):'<p class="muted small">Nothing saved yet.</p>'}</div></div>`;
+}
+
+/* ---------- progress album: before / after ---------- */
+let album=null, baMode='slider', baSpots=false;
+function albumSvg(p){return baSpots?`<svg viewBox="0 0 480 600" class="ba-svg">${(p.lesions||[]).map(l=>`<circle cx="${l[0]*480}" cy="${l[1]*600}" r="${Math.max(5,l[2]*480+4)}" fill="none" stroke="${LT[l[3]]||'#fff'}" stroke-width="2.5"/>`).join('')}</svg>`:'';}
+function tplAlbum(a){
+  album=a; const P=a.photos;
+  if(!P.length) return `<div class="row" style="justify-content:space-between"><h3 style="margin:0">Progress photos</h3><span class="chip grey">Off</span></div>
+    <p class="small muted">Tick <b>Save my front photo to my progress album</b> on the Scan page to keep a face photo with each scan, then compare before and after here. Photos stay on this computer and you can delete them any time.</p>`;
+  const opt=(sel)=>P.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${fmtDT(p.ts)}${p.score!=null?' - score '+p.score:''}</option>`).join('');
+  const A=P.find(p=>p.id===a.a)||P[0], B=P.find(p=>p.id===a.b)||P[P.length-1];
+  const tag=(p,cls,lbl)=>`<span class="ba-tag ${cls}"><b>${lbl}</b> ${fmtDate(p.ts)}${p.score!=null?` &middot; ${p.score}`:''}</span>`;
+  const delta=(A.score!=null&&B.score!=null)?B.score-A.score:null;
+  return `<div class="row" style="justify-content:space-between"><h3 style="margin:0">Progress photos</h3><div class="row"><div class="seg"><button class="${baMode==='slider'?'on':''}" data-act="baMode" data-m="slider">Slider</button><button class="${baMode==='side'?'on':''}" data-act="baMode" data-m="side">Side by side</button></div><label class="opt"><input type="checkbox" data-act="baSpots" ${baSpots?'checked':''}> Show spots</label></div></div>
+   <div class="row" style="margin:12px 0"><select data-act="baPick" data-w="a" style="max-width:260px">${opt(A.id)}</select><span class="muted">vs</span><select data-act="baPick" data-w="b" style="max-width:260px">${opt(B.id)}</select>
+    ${delta!=null?`<span class="chip ${delta>0?'good':delta<0?'bad':'grey'}">${delta>0?'+':''}${delta} score</span>`:''}${A.spots!=null&&B.spots!=null?`<span class="chip grey">spots ${A.spots} &rarr; ${B.spots}</span>`:''}</div>
+   ${baMode==='slider'?`<div class="ba" id="ba" style="--pos:50%"><div class="ba-img"><img src="/api/photo/${B.id}" alt="After">${albumSvg(B)}</div><div class="ba-img ba-top"><img src="/api/photo/${A.id}" alt="Before">${albumSvg(A)}</div><div class="ba-handle"><i>&#8596;</i></div>${tag(A,'l','Before')}${tag(B,'r','After')}</div>`
+     :`<div class="ba-side"><div class="ba-img"><img src="/api/photo/${A.id}" alt="Before">${albumSvg(A)}${tag(A,'l','Before')}</div><div class="ba-img"><img src="/api/photo/${B.id}" alt="After">${albumSvg(B)}${tag(B,'l','After')}</div></div>`}
+   <div class="thumbs">${P.slice().reverse().map(p=>`<div class="thumb ${p.id===A.id||p.id===B.id?'on':''}"><img src="/api/photo/${p.id}" alt="" data-act="baThumb" data-id="${p.id}"><span>${fmtDate(p.ts)}</span><button class="x" data-act="delPhoto" data-id="${p.id}" title="Delete photo">&times;</button></div>`).join('')}</div>
+   <p class="tiny muted" style="margin-top:10px">Photos are cropped around your face and stored only on this computer. Same light and angle each time makes the comparison fair.</p>`;
+}
+function renderAlbum(){const c=$('#albumCard');if(c&&album){c.innerHTML=tplAlbum(album);bindBA();}}
+function bindBA(){
+  const el=$('#ba');if(!el)return;let on=false;
+  const set=e=>{const r=el.getBoundingClientRect();const x=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));el.style.setProperty('--pos',(x*100).toFixed(2)+'%');};
+  el.addEventListener('pointerdown',e=>{on=true;el.setPointerCapture(e.pointerId);set(e);});
+  el.addEventListener('pointermove',e=>{if(on)set(e);});el.addEventListener('pointerup',()=>{on=false;});
+  el.addEventListener('keydown',e=>{const cur=parseFloat(el.style.getPropertyValue('--pos'))||50;if(e.key==='ArrowLeft'||e.key==='ArrowRight'){el.style.setProperty('--pos',Math.max(0,Math.min(100,cur+(e.key==='ArrowLeft'?-5:5)))+'%');e.preventDefault();}});
+  el.tabIndex=0;el.setAttribute('role','slider');el.setAttribute('aria-label','Before and after comparison');
+}
+
+/* ---------- live camera overlay: face tracking + spots on the video ---------- */
+function camAR(r){
+  const cv=$('#camAR');if(!cv)return;const stg=cv.parentNode,W=stg.clientWidth,H=stg.clientHeight,d=Math.min(2,devicePixelRatio||1);
+  cv.width=W*d;cv.height=H*d;const g=cv.getContext('2d');g.scale(d,d);g.clearRect(0,0,W,H);
+  const live=$('#camLive')&&$('#camLive').checked,cnt=$('#camLiveCount');
+  if(!r||!r.found||!r.box||!live){if(cnt)cnt.textContent='';return;}
+  const s=Math.max(W/r.w,H/r.h),ox=(W-r.w*s)/2,oy=(H-r.h*s)/2,mir=cam&&cam.facing==='user';
+  const X=x=>{const v=ox+x*s;return mir?W-v:v;},Y=y=>oy+y*s;
+  let [bx,by,bw,bh]=r.box,x0=X(bx),x1=X(bx+bw);if(x0>x1)[x0,x1]=[x1,x0];const y0=Y(by),y1=Y(by+bh),L=Math.min(30,(x1-x0)*.2);
+  g.lineCap='round';g.lineWidth=3;g.strokeStyle='#34d399';g.shadowColor='#34d399';g.shadowBlur=12;
+  g.beginPath();g.moveTo(x0,y0+L);g.lineTo(x0,y0);g.lineTo(x0+L,y0);g.moveTo(x1-L,y0);g.lineTo(x1,y0);g.lineTo(x1,y0+L);g.moveTo(x1,y1-L);g.lineTo(x1,y1);g.lineTo(x1-L,y1);g.moveTo(x0+L,y1);g.lineTo(x0,y1);g.lineTo(x0,y1-L);g.stroke();
+  let sp=0,mk=0;
+  for(const [x,y,rr,t] of (r.lesions||[])){const c=LT[t]||'#fff',R=Math.max(6,rr*s+4);t==='m'?mk++:sp++;
+    g.shadowColor=c;g.shadowBlur=10;g.lineWidth=2;g.strokeStyle=c;g.beginPath();g.arc(X(x),Y(y),R,0,6.283);g.stroke();
+    g.globalAlpha=.25;g.fillStyle=c;g.fill();g.globalAlpha=1;}
+  g.shadowBlur=0;
+  if(cnt)cnt.textContent=`Live preview: ${sp} spot${sp===1?'':'s'}, ${mk} mark${mk===1?'':'s'}`;
+}
+
+/* ---------- results photo: YouCam-style concern maps ---------- */
+const OV_MODES=[['all','All'],['acne','Acne'],['marks','Dark marks'],['oil','Oiliness'],['red','Redness']];
+const OV_HELP={all:'All detections and the five face zones.',acne:'Inflamed and pustule-like spots only.',marks:'Darker spots that may be post-acne marks (can include freckles or moles).',
+  oil:'Brighter yellow means more shine in that zone, measured from highlights on the skin.',red:'Brighter red means that zone is redder than the rest of your face.'};
+let ovMode='all';
+function drawOverlay(id,view,animate){
   const m=mem[id]; if(!m||!m.canvases[view]) return; const cv=$('#ovcanvas'); if(!cv) return;
-  const src=m.canvases[view], info=m.views[view]; cv.width=src.width;cv.height=src.height;const g=cv.getContext('2d');g.drawImage(src,0,0);
-  const lw=Math.max(2,src.width/450);
-  if(info.box){g.lineWidth=lw;g.strokeStyle='#16a34a';g.strokeRect(...info.box.map((v,i)=>v));}
-  g.lineWidth=Math.max(1,lw/2);for(const z in (info.zones||{})){const b=info.zones[z];g.strokeStyle=ZC[z]+'aa';g.strokeRect(b[0],b[1],b[2]-b[0],b[3]-b[1]);}
-  g.lineWidth=lw;for(const l of info.lesions){g.strokeStyle=LT[l.t];g.beginPath();g.arc(l.x,l.y,l.r+3,0,6.283);g.stroke();}
+  const src=m.canvases[view], info=m.views[view]; cv.width=src.width;cv.height=src.height;const g=cv.getContext('2d');
+  const lw=Math.max(2,src.width/450),fs=Math.max(12,src.width/45),mode=ovMode,zi=info.zinfo||{};
+  const paint=prog=>{
+    g.drawImage(src,0,0);const lim=prog>=1?1e9:prog*src.height;
+    if(mode==='oil'||mode==='red'){
+      const vals=Object.entries(zi).map(([z,v])=>[z,mode==='oil'?v.shine:Math.max(0,v.rel)]),mx=Math.max(.001,...vals.map(v=>v[1]));
+      g.fillStyle='rgba(0,0,0,.28)';g.fillRect(0,0,src.width,Math.min(lim,src.height));
+      for(const [z,v] of vals){const b=(info.zones||{})[z];if(!b||b[1]>lim)continue;const cx=(b[0]+b[2])/2,cy=(b[1]+b[3])/2,rx=(b[2]-b[0])*.75,ry=(b[3]-b[1])*.75,a=.12+.6*(v/mx);
+        const gr=g.createRadialGradient(cx,cy,0,cx,cy,Math.max(rx,ry));const col=mode==='oil'?'255,214,80':'255,64,96';
+        gr.addColorStop(0,`rgba(${col},${a})`);gr.addColorStop(1,`rgba(${col},0)`);g.fillStyle=gr;g.beginPath();g.ellipse(cx,cy,rx,ry,0,0,6.283);g.fill();
+        const txt=mode==='oil'?`${v.toFixed(1)}% shine`:(zi[z].rel>0?'+':'')+zi[z].rel.toFixed(1);g.font=`700 ${fs}px system-ui,sans-serif`;g.textAlign='center';
+        g.lineWidth=lw*1.6;g.strokeStyle='rgba(0,0,0,.65)';g.strokeText(txt,cx,cy+fs*.35);g.fillStyle='#fff';g.fillText(txt,cx,cy+fs*.35);}
+    }
+    if(mode==='all'){if(info.box){g.lineWidth=lw;g.strokeStyle='#16a34a';g.strokeRect(...info.box);}
+      g.lineWidth=Math.max(1,lw/2);for(const z in (info.zones||{})){const b=info.zones[z];if(b[1]>lim)continue;g.strokeStyle=ZC[z]+'aa';g.strokeRect(b[0],b[1],b[2]-b[0],b[3]-b[1]);}}
+    if(mode==='all'||mode==='acne'||mode==='marks'){
+      for(const l of info.lesions){if(l.y>lim)continue;if(mode==='acne'&&l.t==='m')continue;if(mode==='marks'&&l.t!=='m')continue;
+        g.shadowColor=LT[l.t];g.shadowBlur=mode==='all'?0:lw*4;g.lineWidth=lw;g.strokeStyle=LT[l.t];g.beginPath();g.arc(l.x,l.y,l.r+3,0,6.283);g.stroke();
+        if(mode!=='all'){g.globalAlpha=.22;g.fillStyle=LT[l.t];g.fill();g.globalAlpha=1;}}
+      g.shadowBlur=0;}
+    if(prog<1){const y=prog*src.height,gr=g.createLinearGradient(0,y-src.height*.08,0,y);gr.addColorStop(0,'rgba(34,211,238,0)');gr.addColorStop(1,'rgba(34,211,238,.45)');
+      g.fillStyle=gr;g.fillRect(0,y-src.height*.08,src.width,src.height*.08);g.fillStyle='#67e8f9';g.fillRect(0,y-lw/2,src.width,lw);}
+  };
+  if(!animate||reduceMotion()){paint(1);}
+  else{const t0=performance.now(),D=1100,tok=cv._tok=(cv._tok||0)+1;const step=n=>{if(cv._tok!==tok)return;const p=Math.min(1,(n-t0)/D);paint(p<1?p:1);if(p<1)requestAnimationFrame(step);};requestAnimationFrame(step);}
+  const h=$('#ovHelp');if(h)h.textContent=OV_HELP[mode];
+  $$('[data-act=ovMode]').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
 }
 function afterResults(id){
-  const m=mem[id]; if(m){const v=Object.keys(m.views).find(v=>m.views[v].found); if(v) drawOverlay(id,v);}
+  const m=mem[id]; if(m){const v=Object.keys(m.views).find(v=>m.views[v].found); if(v){window._ovView=v;drawOverlay(id,v,true);}}
   const c=$('#progChart'); if(c&&window._prog){drawChart(c,[{color:cssv('--brand'),name:'Skin score',pts:window._prog.map(p=>[p.ts*1000,p.score])}],[]);}
 }
 
@@ -3339,6 +3611,7 @@ function tplHistory(h){
   return `<h2>History</h2>
    <div class="card"><h3>Skin score over time</h3><canvas class="chart" id="hChart"></canvas>${h.hidden?`<p class="tiny muted">${h.hidden} older scan(s) made with a different detector, version or sensitivity are kept but hidden.</p>`:''}</div>
    ${tplHotspots(ok)}
+   <div class="card" id="albumCard">${album?tplAlbum(album):''}</div>
    <div class="card"><h3>Compare two scans</h3>${ok.length<2?'<p class="muted small">Save at least two good scans to compare them.</p>':`<div class="row"><select id="cmpA" data-act="cmpChange" style="max-width:280px">${ok.map(s=>`<option value="${s.id}">${fmtDT(s.ts)} - score ${s.score}</option>`).join('')}</select><span class="muted">vs</span><select id="cmpB" data-act="cmpChange" style="max-width:280px">${ok.map(s=>`<option value="${s.id}">${fmtDT(s.ts)} - score ${s.score}</option>`).join('')}</select></div>
      <div class="grid g2" style="margin-top:12px"><div id="mapA"></div><div id="mapB"></div></div><div class="note info small" id="cmpSum" style="margin-top:10px"></div>`}</div>
    <div class="card"><h3>All scans</h3>${h.scans.length?`<table><thead><tr><th>Date</th><th>Score</th><th>Grade</th><th>Spots</th><th>Marks</th><th></th></tr></thead><tbody>${h.scans.slice().reverse().map(s=>`<tr><td><a href="#/results/${s.id}">${fmtDT(s.ts)}</a> ${s.ok?'':'<span class="chip warn">low quality</span>'}</td><td><b>${s.score}</b></td><td>${esc(s.grade)}</td><td>${s.spots}</td><td>${s.marks}</td><td><button class="btn sm danger" data-act="delScan" data-id="${s.id}">Delete</button></td></tr>`).join('')}</tbody></table>`:'<p class="muted">No scans yet. <a href="#/scan">Take your first scan</a>.</p>'}</div>`;
@@ -3351,7 +3624,7 @@ function renderCompare(){
   const m=matchLesions(a.lesions,b.lesions);$('#cmpSum').innerHTML=`Score ${a.score} &rarr; <b>${b.score}</b> (${b.score-a.score>=0?'+':''}${b.score-a.score}). Active spots ${a.spots} &rarr; <b>${b.spots}</b>. About ${m.cleared} cleared, ${m.added} new, ${m.kept} still there. ${noiseSentence(a.spots,b.spots)}`;
 }
 function afterHistory(){
-  if(!hist)return;const ok=hist.scans.filter(s=>s.ok);drawHeat(ok);drawChart($('#hChart'),[{color:cssv('--brand'),name:'Skin score',pts:ok.map(s=>[s.ts*1000,s.score])}],[]);
+  if(!hist)return;const ok=hist.scans.filter(s=>s.ok);drawHeat(ok);bindBA();drawChart($('#hChart'),[{color:cssv('--brand'),name:'Skin score',pts:ok.map(s=>[s.ts*1000,s.score])}],[]);
   if($('#cmpA')&&ok.length>=2){$('#cmpA').value=ok[Math.max(0,ok.length-2)].id;$('#cmpB').value=ok[ok.length-1].id;renderCompare();}
 }
 
@@ -3454,7 +3727,7 @@ function tplProfile(){
    <p class="tiny muted">Spot detector in use: <b>${cfg.detector==='model'?'trained model':'rule-based'}</b>. Scans made with different detectors are not compared with each other.</p>
    <p class="tiny muted">Keep sensitivity the same between scans. Changing it hides older scans from trends because they are not directly comparable.</p>
    <div class="row"><button class="btn p" data-act="saveProfile">Save profile</button></div></div>
-  <div class="card"><h3>Your data</h3><p class="small muted">Everything is stored on this computer. Photos are never saved.</p>
+  <div class="card"><h3>Your data</h3><p class="small muted">Everything is stored on this computer. Photos are saved only when you choose the progress album, and you can delete them on the History page.</p>
    <div class="row" style="margin-bottom:10px"><a class="btn" href="#/summary">Doctor summary (printable)</a></div>
    <div class="row"><a class="btn" href="/api/export.csv?kind=scans">Export scans (CSV)</a><a class="btn" href="/api/export.csv?kind=diary">Export diary (CSV)</a><a class="btn" href="/api/export.csv?kind=breakouts">Export breakouts (CSV)</a></div>
    <h3 style="margin-top:22px">Delete account</h3><p class="small muted">Permanently deletes your account, scans, diary and reviews.</p>
@@ -3532,7 +3805,8 @@ const VIEWS={
     let id=arg; if(!id){const h=await api('/api/history');const ok=h.scans.filter(s=>s.ok).concat(h.scans.filter(s=>!s.ok));const last=h.scans[h.scans.length-1];if(!last)return `<div class="card"><h2>No results yet</h2><p class="muted">Take your first scan to see your report.</p><a class="btn p" href="#/scan">Start a scan</a></div>`;id=last.id;}
     const r=await api('/api/scan/'+id); window._prog=r.progress.series; window._resId=r.scan.id; return tplResults(r);
   },
-  history:async()=>tplHistory(await api('/api/history')),
+  history:async()=>{const [h,a]=await Promise.all([api('/api/history'),api('/api/album')]);album=a;return tplHistory(h);},
+  products:async()=>tplProducts(),
   diary:async()=>tplDiary(await api('/api/diary')),
   insights:async()=>tplInsights(await api('/api/insights')),
   profile:async()=>tplProfile(),
@@ -3557,6 +3831,19 @@ window.addEventListener('resize',()=>{if(location.hash.startsWith('#/history'))a
 /* ---------- actions ---------- */
 async function reloadMe(){const j=await api('/api/me');me=j.user;if(j.questions){cfg={questions:j.questions,freq:j.freq,labels:j.labels,zones:j.zones,detector:j.detector};}}
 const ACT={
+  ovMode:a=>{ovMode=a.dataset.m;if(window._resId&&window._ovView)drawOverlay(window._resId,window._ovView,true);},
+  savePhotoPref:async a=>{me.profile.save_photos=a.checked;try{await api('/api/profile',{save_photos:a.checked});}catch(e){toast(e.message);}},
+  baMode:a=>{baMode=a.dataset.m;renderAlbum();},
+  baSpots:a=>{baSpots=a.checked;renderAlbum();},
+  baPick:a=>{album[a.dataset.w]=+a.value;renderAlbum();},
+  baThumb:a=>{const id=+a.dataset.id,P=album.photos,A=album.a||P[0].id;if(id===A)return;album.b=id;if(P.findIndex(p=>p.id===id)<P.findIndex(p=>p.id===A)){album.b=A;album.a=id;}renderAlbum();},
+  delPhoto:async(a,e)=>{e.stopPropagation();if(!confirm('Delete this photo? The scan results are kept.'))return;try{await api('/api/delete',{kind:'photo',id:+a.dataset.id});const fresh=await api('/api/album');fresh.a=album.a;fresh.b=album.b;if(!fresh.photos.some(p=>p.id===fresh.a))delete fresh.a;if(!fresh.photos.some(p=>p.id===fresh.b))delete fresh.b;album=fresh;renderAlbum();toast('Photo deleted');}catch(err){toast(err.message);}},
+  pcCheck:()=>{pcState.name=$('#pcName').value.trim();pcState.text=$('#pcText').value;pcState.res=checkProduct(pcState.text);$('#view').innerHTML=tplProducts();fx($('#pcOut'));},
+  pcSample:()=>{pcState={name:'Example gel moisturiser',text:'Aqua, Glycerin, Niacinamide, Isopropyl Myristate, Dimethicone, Salicylic Acid, Cetearyl Alcohol, Parfum, Linalool, Phenoxyethanol',res:null};pcState.res=checkProduct(pcState.text);$('#view').innerHTML=tplProducts();fx($('#pcOut'));},
+  pcSave:async()=>{if(!pcState.res||!pcState.res.n)return;const list=[...(me.profile.products||[]),{name:pcState.name||'Unnamed product',text:pcState.text,ts:Date.now()/1000}].slice(-40);
+    try{await api('/api/profile',{products:list});me.profile.products=list;toast('Saved to your shelf');$('#view').innerHTML=tplProducts();}catch(e){toast(e.message);}},
+  pcOpen:a=>{const p=(me.profile.products||[])[+a.dataset.i];if(!p)return;pcState={name:p.name,text:p.text,res:checkProduct(p.text)};$('#view').innerHTML=tplProducts();fx($('#pcOut'));window.scrollTo({top:0,behavior:'smooth'});},
+  pcDel:async(a,e)=>{e.stopPropagation();const list=(me.profile.products||[]).filter((_,i)=>i!==+a.dataset.i);try{await api('/api/profile',{products:list});me.profile.products=list;$('#view').innerHTML=tplProducts();}catch(err){toast(err.message);}},
   introSkip:()=>{if(introSkip)introSkip();},
   openCam:(a,e)=>{e.stopPropagation();openCam(a.dataset.v);},
   camClose:()=>closeCam(),
@@ -3583,7 +3870,7 @@ const ACT={
   removePhoto:(a,e)=>{e.stopPropagation();const v=a.dataset.v;delete sc.photos[v];delete sc.canvases[v];delete sc.checks[v];refreshScan();},
   analyze:()=>doAnalyze(),
   jump:(a,e)=>{e.preventDefault();const el=document.getElementById(a.dataset.to);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},
-  showView:a=>{drawOverlay(+a.dataset.id,a.dataset.v);$$('[data-act=showView]').forEach(b=>b.classList.toggle('p',b===a));},
+  showView:a=>{window._ovView=a.dataset.v;drawOverlay(+a.dataset.id,a.dataset.v,true);$$('[data-act=showView]').forEach(b=>b.classList.toggle('p',b===a));},
   openReview:a=>openReview(+a.dataset.id),
   rvCancel:()=>{$('#rvmodal').style.display='none';rv=null;},
   rvSubmit:async()=>{try{await api('/api/review',{detected:rv.dets.length,false_pos:rv.dets.filter(d=>d.fp).length,missed:rv.missed.length});toast('Review saved. See Insights for accuracy.');$('#rvmodal').style.display='none';rv=null;}catch(e){toast(e.message);}},
