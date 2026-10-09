@@ -1,0 +1,12 @@
+torch>=2.2
+torchvision>=0.17
+numpy>=1.24
+scipy>=1.10
+pydicom>=2.4
+fastapi>=0.110
+uvicorn>=0.27
+python-multipart>=0.0.9
+# optional: NIfTI input
+nibabel>=5.0
+# tests
+pytest>=7
