@@ -1,10 +1,10 @@
 """
 Command line interface.
 
-    python -m sybil.cli download                 # fetch the official MIT ensemble (~700 MB)
-    python -m sybil.cli predict scan.zip         # DICOM zip / folder, NIfTI or .npz
-    python -m sybil.cli predict --phantom        # synthetic chest CT with a nodule
-    python -m sybil.cli serve                    # web workstation on http://127.0.0.1:8000
+    python -m pycanc.cli download                 # fetch the official MIT ensemble (~700 MB)
+    python -m pycanc.cli predict scan.zip         # DICOM zip / folder, NIfTI or .npz
+    python -m pycanc.cli predict --phantom        # synthetic chest CT with a nodule
+    python -m pycanc.cli serve                    # web workstation on http://127.0.0.1:8000
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import time
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="sybil", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(prog="pycanc", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     d = sub.add_parser("download", help="download official checkpoints")
@@ -46,7 +46,7 @@ def main(argv=None):
         serve()
         return
 
-    from .predict import SybilEngine
+    from .predict import PyCancEngine
     from .preprocess import load_any, preprocess
     from . import weights
 
@@ -57,9 +57,9 @@ def main(argv=None):
         ct = make_phantom()
     else:
         ct = load_any(a.path)
-    engine = SybilEngine(a.dir or weights.DEFAULT_DIR)
+    engine = PyCancEngine(a.dir or weights.DEFAULT_DIR)
     if not engine.official:
-        print("WARNING: official checkpoints not found -> untrained weights; run `python -m sybil.cli download`.",
+        print("WARNING: official checkpoints not found -> untrained weights; run `python -m pycanc.cli download`.",
               file=sys.stderr)
     t = time.time()
     res = engine.predict(preprocess(ct), a.models,
@@ -70,7 +70,7 @@ def main(argv=None):
     if a.json:
         print(json.dumps(res, indent=2))
         return
-    print(f"\nSybil · {res['models_used']} model(s) · {'calibrated' if res['calibrated'] else 'raw'} · {res['seconds']} s")
+    print(f"\nPyCanc · {res['models_used']} model(s) · {'calibrated' if res['calibrated'] else 'raw'} · {res['seconds']} s")
     for i, r in enumerate(res["risk"]):
         bar = "█" * max(1, round(r * 200)) if r > 0 else ""
         print(f"  year {i + 1}: {r * 100:6.2f}%  {bar[:60]}")

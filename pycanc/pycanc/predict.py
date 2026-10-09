@@ -8,14 +8,14 @@ from typing import Callable
 import numpy as np
 import torch
 
-from .model import SybilNet
+from .model import PyCancNet
 from .preprocess import Prepared
 from .weights import DEFAULT_DIR, CHECKPOINT_IDS, load_ensemble
 
 STAGES = ["stem", "layer1", "layer2", "layer3", "layer4", "pool", "head"]
 
 
-class SybilEngine:
+class PyCancEngine:
     def __init__(self, checkpoint_dir: Path | str = DEFAULT_DIR, device: str | None = None):
         self.checkpoint_dir = Path(checkpoint_dir)
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
@@ -28,7 +28,7 @@ class SybilEngine:
         self.official = len(models) > 0
         if not models:
             torch.manual_seed(0)
-            models = [SybilNet().eval()]
+            models = [PyCancNet().eval()]
         self.models = [m.to(self.device) for m in models]
         self.calibrators = cals
 

@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .model import SybilNet
+from .model import PyCancNet
 
 CHECKPOINT_URL = "https://github.com/reginabarzilaygroup/Sybil/releases/download/v1.5.0/sybil_checkpoints.zip"
 CHECKPOINT_IDS = [
@@ -28,7 +28,19 @@ CHECKPOINT_IDS = [
     "65fd1f04cb4c5847d86a9ed8ba31ac1a",
     "624407ef8e3a2a009f9fa51f9846fe9a",
 ]
-DEFAULT_DIR = Path(os.environ.get("SYBIL_CHECKPOINT_DIR", Path.home() / ".sybil"))
+
+
+def _default_dir() -> Path:
+    env = os.environ.get("PYCANC_CHECKPOINT_DIR") or os.environ.get("SYBIL_CHECKPOINT_DIR")
+    if env:
+        return Path(env)
+    legacy = Path.home() / ".sybil"  # where earlier versions downloaded to
+    if (legacy / f"{CHECKPOINT_IDS[0]}.ckpt").exists():
+        return legacy
+    return Path.home() / ".pycanc"
+
+
+DEFAULT_DIR = _default_dir()
 
 
 def _safe_globals():
@@ -52,7 +64,7 @@ def download_checkpoints(target: Path = DEFAULT_DIR, progress=print) -> Path:
         return target
     target.mkdir(parents=True, exist_ok=True)
     zpath = target / "sybil_checkpoints.zip"
-    progress(f"Downloading official Sybil checkpoints (~700 MB) to {target} ...")
+    progress(f"Downloading official MIT Sybil checkpoints (~700 MB) to {target} ...")
     urllib.request.urlretrieve(CHECKPOINT_URL, zpath)
     with zipfile.ZipFile(zpath) as z:
         for name in z.namelist():
@@ -63,12 +75,12 @@ def download_checkpoints(target: Path = DEFAULT_DIR, progress=print) -> Path:
     return target
 
 
-def load_checkpoint(path: Path) -> SybilNet:
+def load_checkpoint(path: Path) -> PyCancNet:
     with torch.serialization.safe_globals(_safe_globals()):
         ckpt = torch.load(path, map_location="cpu", weights_only=True)
     sd = ckpt.get("state_dict", ckpt)
     sd = {k[len("model."):] if k.startswith("model.") else k: v for k, v in sd.items()}
-    model = SybilNet()
+    model = PyCancNet()
     model.load_state_dict(sd, strict=True)
     return model.eval()
 

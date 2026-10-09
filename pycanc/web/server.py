@@ -1,5 +1,5 @@
 """
-Sybil-X web server.
+PyCanc web server.
 
     python -m web.server            # http://localhost:8000
 """
@@ -20,18 +20,18 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from sybil import weights
-from sybil.phantom import make_phantom
-from sybil.predict import SybilEngine
-from sybil.preprocess import load_any, preprocess, to_model_coords
+from pycanc import weights
+from pycanc.phantom import make_phantom
+from pycanc.predict import PyCancEngine
+from pycanc.preprocess import load_any, preprocess, to_model_coords
 
 STATIC = Path(__file__).parent / "static"
 
-app = FastAPI(title="Sybil-X")
+app = FastAPI(title="PyCanc")
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
-engine = SybilEngine(os.environ.get("SYBIL_CHECKPOINT_DIR", weights.DEFAULT_DIR))
+engine = PyCancEngine(weights.DEFAULT_DIR)
 pool = ThreadPoolExecutor(max_workers=1)
 cases: dict[str, dict] = {}
 download_state = {"state": "idle", "message": ""}

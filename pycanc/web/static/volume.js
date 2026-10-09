@@ -1,4 +1,4 @@
-/* Sybil·X — WebGL2 volume ray-marcher.
+/* PyCanc — WebGL2 volume ray-marcher.
  * Textures: CT (HU -1000..1500 → 0..255), lung mask, attention (25×16×16), all trilinear.
  * Texture axes: x = image column, y = image row (anterior→posterior), z = slice (superior→inferior).
  * World axes:   x = image column,  y = superior (up),                 z = anterior (towards viewer).

@@ -3,13 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sybil·X — Lung Cancer Risk from a Single LDCT</title>
+  <title>PyCanc — See lung cancer risk years ahead</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%233be0ff' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23ff4d7d'/%3E%3C/svg%3E">
 </head>
 <body>
+<div id="splash" aria-hidden="true">
+  <svg viewBox="0 0 120 120" width="120" height="120">
+    <defs><linearGradient id="sg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3be0ff"/><stop offset="1" stop-color="#8b6bff"/></linearGradient></defs>
+    <circle cx="60" cy="60" r="52" fill="none" stroke="url(#sg)" stroke-width="3" stroke-linecap="round" class="sp-ring"/>
+    <path d="M55 30v24c0 6-3 9-9 12-9 3-15 12-15 24 0 6 3 9 9 9 9 0 15-6 15-15V30zM65 30v24c0 6 3 9 9 12 9 3 15 12 15 24 0 6-3 9-9 9-9 0-15-6-15-15V30z" fill="url(#sg)" class="sp-lung"/>
+    <circle cx="78" cy="72" r="5" fill="#ff4d7d" class="sp-dot"/>
+  </svg>
+  <div class="sp-name">Py<span>Canc</span></div>
+</div>
 <div class="bg-glow"></div>
 <div class="bg-grid"></div>
 
@@ -22,20 +31,66 @@
       <circle cx="26" cy="24" r="2.4" fill="#ff4d7d"><animate attributeName="opacity" values="1;.3;1" dur="1.6s" repeatCount="indefinite"/></circle>
     </svg>
     <div>
-      <div class="brand-name">SYBIL<span>·X</span></div>
+      <div class="brand-name" style="cursor:pointer" onclick="document.querySelector('[data-page=home]').click()">PY<span>CANC</span></div>
       <div class="brand-sub">Future lung-cancer risk from a single low-dose chest CT</div>
     </div>
   </div>
   <nav class="tabs">
-    <button data-page="workspace" class="active">Workspace</button>
+    <button data-page="home" class="active">Home</button>
+    <button data-page="workspace">Workspace</button>
     <button data-page="model">Model</button>
     <button data-page="about">About</button>
   </nav>
   <div class="status" id="status"><span class="chip"><span class="dot"></span>Connecting…</span></div>
 </header>
 
+<!-- ======================= WELCOME ======================= -->
+<div id="page-home">
+  <section class="home">
+    <canvas id="hero-canvas"></canvas>
+    <div class="hero-inner">
+      <div class="eyebrow"><span class="pulse"></span>Deep learning on low-dose chest CT</div>
+      <h1 class="h-title">Py<span>Canc</span></h1>
+      <p class="h-tag">See lung cancer risk <em>up to six years</em> before it appears.</p>
+      <p class="h-sub">One scan in, six calibrated yearly risks out, plus a 3D map of exactly where the network looked. Built on the MIT&nbsp;/&nbsp;MGH Sybil architecture and its published weights.</p>
+      <div class="cta">
+        <button class="btn primary" data-go="workspace">Enter workspace →</button>
+        <button class="btn" data-go="demo">▶ Run a demo scan</button>
+        <button class="btn ghost-l" data-go="model">How it works</button>
+      </div>
+      <div class="h-stats">
+        <div><b data-count="6">0</b><span>year risk horizon</span></div>
+        <div><b data-count="1">0</b><span>CT scan needed</span></div>
+        <div><b data-count="5">0</b><span>model ensemble</span></div>
+        <div><b data-count="0.92" data-dec="2">0</b><span>1-yr AUC (NLST, paper)</span></div>
+      </div>
+      <div class="term" id="term"></div>
+    </div>
+    <a class="scroll-hint" href="#steps">scroll</a>
+  </section>
+
+  <section class="steps" id="steps">
+    <div class="step">
+      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 15V3m0 0-4 4m4-4 4 4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></div>
+      <span class="n">01</span><h3>Load a scan</h3>
+      <p>Drop a zipped DICOM series, NIfTI or .npz, or synthesise a chest CT with a nodule you design.</p>
+    </div>
+    <div class="step">
+      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg></div>
+      <span class="n">02</span><h3>Run the network</h3>
+      <p>A 3D ResNet reads all 200 slices, attention pooling finds what matters, a hazard head outputs years 1–6.</p>
+    </div>
+    <div class="step">
+      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/></svg></div>
+      <span class="n">03</span><h3>See why</h3>
+      <p>Explore the attention heat-map in linked 2D views and a ray-marched 3D volume, then export a report.</p>
+    </div>
+  </section>
+  <footer class="home-foot">Architecture and weights: Mikhael, Wohlwend, Yala, Barzilay et al., <i>J Clin Oncol</i> 2023 (MIT Jameel Clinic &amp; MGH). Research and education only, not a medical device.</footer>
+</div>
+
 <!-- ======================= WORKSPACE ======================= -->
-<main id="page-workspace" class="workspace">
+<main id="page-workspace" class="workspace hidden">
   <aside class="panel left">
     <div class="sec">
       <h3>Load CT</h3>
@@ -73,7 +128,7 @@
     </div>
 
     <div class="sec">
-      <h3>Run Sybil</h3>
+      <h3>Run PyCanc</h3>
       <div class="row"><span>Ensemble size</span></div>
       <div class="seg" id="ens"><button data-v="1" class="on">1 model</button><button data-v="3">3</button><button data-v="5">5 · full</button></div>
       <button class="btn primary wide" id="run" style="margin-top:12px">▶ Predict 6-year risk</button>
@@ -211,7 +266,7 @@
 
 <!-- ======================= MODEL PAGE ======================= -->
 <section id="page-model" class="page hidden">
-  <h1>Inside <span>Sybil</span></h1>
+  <h1>Inside <span>PyCanc</span></h1>
   <p class="lead">One low-dose CT in, six calibrated yearly risks out — no radiologist annotations, clinical data or prior scans needed at inference time. This replica reproduces the published network layer-for-layer, so the official MIT checkpoints load unchanged.</p>
 
   <div class="arch">
@@ -272,7 +327,7 @@
     <div class="card"><h4>Multi-attention pooling</h4><p>Learned spatial attention inside each slice plus attention across slices yields the heat-maps shown in the viewer. A max-pool + Conv1d branch and a global max-pool are concatenated into one 1536-d vector.</p></div>
     <div class="card"><h4>Cumulative hazard layer</h4><p>Non-negative yearly hazards are summed so predicted risk can never decrease with follow-up time.</p><div class="formula">z<sub>t</sub> = b(x) + Σ<sub>i≤t</sub> ReLU(h<sub>i</sub>(x)),&nbsp; P(cancer ≤ t) = σ(z<sub>t</sub>)</div></div>
     <div class="card"><h4>Ensemble + calibration</h4><p>Five independently trained models are averaged; per-year Platt scaling followed by isotonic regression maps scores to calibrated probabilities.</p></div>
-    <div class="card"><h4>Training signal</h4><p>Trained on NLST with censored survival labels (masked BCE per year) plus attention guidance from radiologist-drawn nodule boxes on a subset — see <code>sybil/train.py</code>.</p></div>
+    <div class="card"><h4>Training signal</h4><p>Trained on NLST with censored survival labels (masked BCE per year) plus attention guidance from radiologist-drawn nodule boxes on a subset — see <code>pycanc/train.py</code>.</p></div>
   </div>
 </section>
 
@@ -281,7 +336,7 @@
   <h1>About <span>this replica</span></h1>
   <p class="lead">Sybil was developed by Peter Mikhael, Jeremy Wohlwend, Adam Yala, Regina Barzilay, Florian Fintelmann, Lecia Sequist and colleagues at MIT CSAIL / Jameel Clinic and Massachusetts General Hospital. This project rebuilds the model from the paper and the public reference code, and adds an interactive 2D/3D workstation around it.</p>
   <div class="cards" style="margin-top:22px">
-    <div class="card"><h4>Using the real weights</h4><p>Click <b>Get official weights</b> in the top bar (or run <code>python -m sybil.cli download</code>). The five MIT checkpoints and calibrators (~700 MB) load into this replica unchanged. Without them the network runs with untrained weights and its numbers are meaningless.</p></div>
+    <div class="card"><h4>Using the real weights</h4><p>Click <b>Get official weights</b> in the top bar (or run <code>python -m pycanc.cli download</code>). The five MIT checkpoints and calibrators (~700 MB) load into this replica unchanged. Without them the network runs with untrained weights and its numbers are meaningless.</p></div>
     <div class="card"><h4>Your own scans</h4><p>Zip a DICOM series folder and drop it on the workspace. NIfTI volumes and <code>.npz</code> files (<code>hu</code>, <code>spacing</code>) work too. Everything is processed locally on your machine.</p></div>
     <div class="card"><h4>Phantom generator</h4><p>A procedural chest CT with vessels, airways, ribs, heart and a configurable nodule, so you can watch how size, density, margin and location move the risk and the attention.</p></div>
     <div class="card"><h4>Reference</h4><p>Mikhael PG, Wohlwend J, Yala A, et al. <i>Sybil: A Validated Deep Learning Model to Predict Future Lung Cancer Risk From a Single Low-Dose Chest Computed Tomography.</i> J Clin Oncol 41:2191–2200, 2023.</p></div>
@@ -292,5 +347,6 @@
 <div id="toast"></div>
 <script src="/static/volume.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/welcome.js"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 """
-SybilNet -- a faithful re-implementation of the network described in
+PyCancNet -- a faithful re-implementation of the network described in
 
     Mikhael, P.G., Wohlwend, J., Yala, A. et al. "Sybil: A Validated Deep Learning
     Model to Predict Future Lung Cancer Risk From a Single Low-Dose Chest Computed
@@ -20,7 +20,7 @@ Architecture
         -> logits for years 1..6
 
 Layer and parameter names match the official implementation, so the released
-checkpoints load straight into this module (see ``sybil.weights``).
+checkpoints load straight into this module (see ``pycanc.weights``).
 """
 from __future__ import annotations
 
@@ -159,7 +159,7 @@ class Cumulative_Probability_Layer(nn.Module):
 # --------------------------------------------------------------------------- #
 #  Full network
 # --------------------------------------------------------------------------- #
-class SybilNet(nn.Module):
+class PyCancNet(nn.Module):
     def __init__(self, max_followup: int = 6, dropout: float = 0.2, pretrained_encoder: bool = False):
         super().__init__()
         self.hidden_dim = 512

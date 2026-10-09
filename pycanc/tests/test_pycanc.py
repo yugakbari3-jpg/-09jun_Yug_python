@@ -1,16 +1,16 @@
 import numpy as np
 import torch
 
-from sybil.model import Cumulative_Probability_Layer, SybilNet
-from sybil.phantom import make_phantom
-from sybil.predict import hotspots
-from sybil.preprocess import apply_windowing, preprocess, to_model_coords
-from sybil.train import annotation_loss, concordance_index, survival_labels, survival_loss
-from sybil.weights import SimpleIsotonic
+from pycanc.model import Cumulative_Probability_Layer, PyCancNet
+from pycanc.phantom import make_phantom
+from pycanc.predict import hotspots
+from pycanc.preprocess import apply_windowing, preprocess, to_model_coords
+from pycanc.train import annotation_loss, concordance_index, survival_labels, survival_loss
+from pycanc.weights import SimpleIsotonic
 
 
 def test_forward_shapes_small_volume():
-    m = SybilNet().eval()
+    m = PyCancNet().eval()
     with torch.no_grad():
         out = m(torch.randn(1, 3, 32, 64, 64))
     assert out["logit"].shape == (1, 6)
@@ -27,7 +27,7 @@ def test_cumulative_layer_is_monotone():
 
 
 def test_state_dict_matches_reference_names():
-    keys = set(SybilNet().state_dict())
+    keys = set(PyCancNet().state_dict())
     for k in ["image_encoder.0.0.weight", "pool.image_pool1.attention_fc.weight", "pool.volume_pool2.conv1d.weight",
               "pool.hidden_fc.weight", "prob_of_failure_layer.upper_triagular_mask",
               "prob_of_failure_layer.base_hazard_fc.bias"]:
@@ -64,7 +64,7 @@ def test_survival_labels():
 
 
 def test_losses_backprop():
-    m = SybilNet()
+    m = PyCancNet()
     out = m(torch.randn(2, 3, 32, 64, 64))
     ann = torch.zeros(2, 1, 200, 256, 256)
     ann[0, :, 90:100, 100:120, 100:120] = 1

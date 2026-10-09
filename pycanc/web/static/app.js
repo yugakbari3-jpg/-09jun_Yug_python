@@ -1,4 +1,4 @@
-/* Sybil·X — workstation front-end */
+/* PyCanc — workstation front-end */
 (() => {
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -347,7 +347,7 @@
     S.poll = setInterval(async () => {
       if (S.caseId !== id) return stopPoll();
       const j = await (await api(`/api/cases/${id}/job`)).json();
-      if (j.state === "done") { stopPoll(); applyResult(j.result); refreshCases(); toast(`Sybil finished in ${j.result.seconds}s`); }
+      if (j.state === "done") { stopPoll(); applyResult(j.result); refreshCases(); toast(`PyCanc finished in ${j.result.seconds}s`); }
       else if (j.state === "error") { stopPoll(); setPipe(null); toast("Error: " + j.error, 6000); }
       else setPipe(j.progress, (Date.now() - t0) / 1000);
     }, 600);
@@ -404,7 +404,7 @@
     const yrs = $("#years");
     if (!res) {
       $("#arc").setAttribute("stroke-dasharray", "0 578"); $("#arc").style.opacity = 0; $("#big").innerHTML = "—"; $("#big").dataset.v = 0;
-      $("#big-sub").textContent = S.caseId ? "press ▶ to run Sybil" : "load a CT";
+      $("#big-sub").textContent = S.caseId ? "press ▶ to run PyCanc" : "load a CT";
       yrs.innerHTML = Array.from({ length: 6 }, (_, i) => `<div class="year"><b>—</b><span>YR ${i + 1}</span></div>`).join("");
       $("#curve").innerHTML = ""; $("#hot").innerHTML = `<div class="placeholder">Hotspots appear after prediction</div>`;
       renderWarn(null); return;
@@ -425,7 +425,7 @@
       el.innerHTML = `<div class="warn-box"><b>Untrained weights.</b> The network architecture is exact, but no official checkpoints were found, so these numbers are random. Load the MIT ensemble to get real predictions.<div style="margin-top:8px"><button class="btn ghost" id="dl2">Get official weights (~700 MB)</button></div></div>`;
       $("#dl2").onclick = downloadWeights;
     } else if (res && currentCase()?.meta?.source === "Synthetic phantom") {
-      el.innerHTML = `<div class="warn-box" style="border-color:rgba(59,224,255,.3);background:rgba(59,224,255,.06);color:#bfefff"><b style="color:var(--cyan)">Phantom scan.</b> Real Sybil weights on a synthetic CT: useful for seeing how the model reacts to nodule size, density and location, not as a real risk estimate.</div>`;
+      el.innerHTML = `<div class="warn-box" style="border-color:rgba(59,224,255,.3);background:rgba(59,224,255,.06);color:#bfefff"><b style="color:var(--cyan)">Phantom scan.</b> Real MIT Sybil weights on a synthetic CT: useful for seeing how the model reacts to nodule size, density and location, not as a real risk estimate.</div>`;
     } else el.innerHTML = "";
   }
 
@@ -505,7 +505,7 @@
     if (dl) setTimeout(loadStatus, 3000);
     else if (st.download?.state === "error") toast("Download failed: " + st.download.message, 6000);
   }
-  async function downloadWeights() { await api("/api/weights/download", { method: "POST" }); toast("Downloading official Sybil checkpoints…"); loadStatus(); }
+  async function downloadWeights() { await api("/api/weights/download", { method: "POST" }); toast("Downloading official MIT checkpoints…"); loadStatus(); }
   function updateEta() {
     const cpu = S.status?.device === "cpu";
     $("#eta").textContent = cpu ? `≈ ${S.nModels} min on CPU (about 60 s per model) · a GPU takes seconds` : "GPU: a few seconds per model";
@@ -523,18 +523,18 @@
     });
     return out;
   }
-  $("#shot").onclick = () => { const a = document.createElement("a"); a.download = `sybil-x-${S.caseId || "view"}.png`; a.href = composite().toDataURL("image/png"); a.click(); };
+  $("#shot").onclick = () => { const a = document.createElement("a"); a.download = `pycanc-${S.caseId || "view"}.png`; a.href = composite().toDataURL("image/png"); a.click(); };
   $("#report").onclick = () => {
     const res = S.result, c = currentCase(); if (!res) return toast("Run a prediction first");
     const img = composite().toDataURL("image/jpeg", 0.9), date = new Date().toLocaleString();
     const w = window.open("", "_blank");
-    w.document.write(`<!doctype html><html><head><title>Sybil·X report — ${c.name}</title><style>
+    w.document.write(`<!doctype html><html><head><title>PyCanc report — ${c.name}</title><style>
       body{font:14px Inter,system-ui,sans-serif;color:#111;max-width:860px;margin:30px auto;padding:0 20px}
       h1{font-size:22px;margin:0}h2{font-size:15px;margin:26px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px}
       table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:6px 8px;text-align:center;font-size:13px}
       th{background:#f4f6fb}.big{font-size:40px;font-weight:800}.muted{color:#666;font-size:12px}img{width:100%;border-radius:8px}
       .warn{background:#fff6e5;border:1px solid #f0c27a;padding:10px;border-radius:8px;font-size:12.5px}</style></head><body>
-      <h1>Sybil·X — lung cancer risk report</h1><div class="muted">${c.name} · ${c.meta?.source || ""} · generated ${date}</div>
+      <h1>PyCanc — lung cancer risk report</h1><div class="muted">${c.name} · ${c.meta?.source || ""} · generated ${date}</div>
       <h2>Predicted risk</h2><div class="big">${pct(res.risk[5])}%</div><div class="muted">probability of lung cancer diagnosis within 6 years (${res.models_used}-model ensemble, ${res.calibrated ? "calibrated" : "uncalibrated"})</div>
       <table style="margin-top:12px"><tr><th></th>${res.risk.map((_, i) => `<th>Year ${i + 1}</th>`).join("")}</tr>
       <tr><td>Calibrated</td>${res.risk.map(p => `<td>${pct(p, 2)}%</td>`).join("")}</tr>
@@ -547,11 +547,39 @@
   };
 
   // ------------------------------------------------------------------ pages
-  $$(".tabs button").forEach(b => b.onclick = () => {
-    $$(".tabs button").forEach(x => x.classList.toggle("active", x === b));
-    ["workspace", "model", "about"].forEach(p => $(`#page-${p}`).classList.toggle("hidden", p !== b.dataset.page));
-    if (b.dataset.page === "workspace") requestAnimationFrame(() => { Object.values(views).forEach(drawView); if (r3d) r3d.dirty = true; });
+  function goPage(page) {
+    $$(".tabs button").forEach(x => x.classList.toggle("active", x.dataset.page === page));
+    ["home", "workspace", "model", "about"].forEach(p => $(`#page-${p}`).classList.toggle("hidden", p !== page));
+    window.scrollTo({ top: 0 });
+    if (page === "workspace") requestAnimationFrame(() => { Object.values(views).forEach(drawView); if (r3d) r3d.dirty = true; });
+  }
+  $$(".tabs button").forEach(b => b.onclick = () => goPage(b.dataset.page));
+  $$("[data-go]").forEach(b => b.onclick = () => {
+    const g = b.dataset.go;
+    goPage(g === "demo" ? "workspace" : g);
+    if (g === "demo") { const t = setInterval(() => { if (S.vol) { clearInterval(t); if (!S.result) $("#run").click(); } }, 300); }
   });
+
+  // welcome: count-up stats + terminal lines
+  (function welcome() {
+    $$("[data-count]").forEach(el => {
+      const to = +el.dataset.count, dec = +(el.dataset.dec || 0), t0 = performance.now() + 1500;
+      const step = t => { const k = clamp((t - t0) / 1400, 0, 1), e = 1 - Math.pow(1 - k, 3); el.textContent = (to * e).toFixed(dec); if (k < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+    });
+    const term = $("#term"); if (!term) return;
+    const lines = ["> pycanc.init()", "  loading 3D ResNet-18 encoder … ok", "  attention pooling · cumulative hazard head … ok"];
+    let i = 0, waits = 0;
+    const next = () => {
+      if (i < lines.length) { term.innerHTML += `<div>${lines[i++]}</div>`; setTimeout(next, 650); return; }
+      const st = S.status;
+      if (!st && waits++ < 8) { setTimeout(next, 700); return; }
+      term.innerHTML += st ? `<div class="${st.official_weights ? "ok" : "warn"}">  ${st.official_weights ? `✓ ${st.num_models} official MIT models ready on ${st.device.toUpperCase()}` : "! no trained weights found · click “Get official weights”"}</div>`
+        : `<div class="warn">  ! server offline</div>`;
+    };
+    setTimeout(next, 1700);
+  })();
+
   (function stack() {
     let s = "";
     for (let i = 7; i >= 0; i--) s += `<rect x="${i * 5}" y="${i * 6}" width="72" height="72" rx="6" fill="url(#vol)" stroke="rgba(59,224,255,${0.15 + (7 - i) * 0.06})"/>`;

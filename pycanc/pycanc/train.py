@@ -1,5 +1,5 @@
 """
-Training / fine-tuning SybilNet with the objectives from the paper.
+Training / fine-tuning PyCancNet with the objectives from the paper.
 
     loss = masked survival BCE over years 1..6
          + λ_img * KL(image_attention || nodule-box distribution per slice)
@@ -16,8 +16,8 @@ A CSV with columns
     years_to_last_followup  integer years of cancer-free follow-up
     mask_path   (optional)  .npz with `mask` (Z, Y, X) on the same grid as the CT
 
-    python -m sybil.train --csv train.csv --val-csv val.csv --epochs 10
-    python -m sybil.train --demo            # tiny synthetic run to check the loop
+    python -m pycanc.train --csv train.csv --val-csv val.csv --epochs 10
+    python -m pycanc.train --demo            # tiny synthetic run to check the loop
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
-from .model import SybilNet
+from .model import PyCancNet
 from .preprocess import CTVolume, NUM_IMAGES, _to_model_grid, load_any, preprocess
 
 MAX_FOLLOWUP = 6
@@ -201,7 +201,7 @@ def main(argv=None):
         model = load_checkpoint(Path(a.init))
         model.dropout.p = a.dropout
     else:
-        model = SybilNet(dropout=a.dropout, pretrained_encoder=not a.demo)
+        model = PyCancNet(dropout=a.dropout, pretrained_encoder=not a.demo)
     model.to(device)
 
     tl = DataLoader(CTDataset(train_rows), batch_size=a.batch_size, shuffle=True, num_workers=a.workers)
