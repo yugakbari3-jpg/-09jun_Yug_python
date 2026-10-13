@@ -38,6 +38,7 @@
   <nav class="tabs">
     <button data-page="home" class="active">Home</button>
     <button data-page="workspace">Workspace</button>
+    <button data-page="analysis">Analysis</button>
     <button data-page="model">Model</button>
     <button data-page="about">About</button>
   </nav>
@@ -116,6 +117,8 @@
         <div class="row" style="margin-top:12px"><span>Level</span><output id="o-lvl">upper</output></div>
         <input type="range" id="p-lvl" min="0" max="1" step="0.01" value="0.35">
       </div>
+      <div class="row" style="margin-top:12px"><span>Emphysema</span><output id="o-emph">none</output></div>
+      <input type="range" id="p-emph" min="0" max="0.4" step="0.02" value="0">
       <div class="row" style="margin-top:12px"><span>Seed</span>
         <span style="display:flex;gap:6px"><input class="num" id="p-seed" type="number" value="7"><button class="btn icon ghost" id="dice" title="Random seed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="15" r="1.2" fill="currentColor"/><circle cx="15" cy="9" r="1.2" fill="currentColor"/><circle cx="9" cy="15" r="1.2" fill="currentColor"/></svg></button></span>
       </div>
@@ -133,6 +136,7 @@
         <summary>Add clinical history for PLCOm2012</summary>
         <div class="pgrid">
           <label>Age<input class="num" type="number" id="c-age" value="62" min="18" max="100"></label>
+          <label>Sex<select class="sel" id="c-sex"><option value="unspecified">—</option><option value="female">Female</option><option value="male">Male</option></select></label>
           <label>BMI<input class="num" type="number" id="c-bmi" value="27" step="0.1"></label>
           <label class="full">Smoking
             <select class="sel" id="c-smk"><option value="current">Current smoker</option><option value="former">Former smoker</option><option value="never">Never smoked</option></select></label>
@@ -192,6 +196,12 @@
           <option value="4">Attention focus</option>
         </select>
         <button class="btn icon ghost on" id="rot" title="Auto-rotate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg></button>
+      </div>
+      <div class="grp">
+        <label class="t">Nodules</label>
+        <label class="switch" title="Show detected nodules"><input type="checkbox" id="fnd" checked><span></span></label>
+        <label class="t">Emph</label>
+        <label class="switch" title="Highlight emphysema (below −950 HU)"><input type="checkbox" id="emo"><span></span></label>
       </div>
       <div class="grp">
         <label class="t">Truth</label>
@@ -257,6 +267,11 @@
       <div class="years" id="years"></div>
     </div>
 
+    <div class="sec">
+      <h3>Scan findings</h3>
+      <div class="findings" id="findings"><div class="placeholder">Analysing scan…</div></div>
+    </div>
+
     <div class="sec" id="clin-sec">
       <h3>Clinical risk · PLCOm2012</h3>
       <div class="clin" id="clin"><div class="placeholder">Add patient history on the left to compare image-based and clinical risk</div></div>
@@ -294,6 +309,18 @@
     <div class="disclaimer">Research replica of Sybil (Mikhael et al., <i>J Clin Oncol</i> 2023, MIT Jameel Clinic &amp; MGH). Not a medical device and not for clinical decisions.</div>
   </aside>
 </main>
+
+<!-- ======================= ANALYSIS PAGE ======================= -->
+<section id="page-analysis" class="page wide-page hidden">
+  <div class="an-head">
+    <div>
+      <h1>Scan <span>analysis</span></h1>
+      <p class="lead" id="an-sub">Quantitative findings measured at the scan's native resolution.</p>
+    </div>
+    <div class="an-actions"><button class="btn" id="an-ws">← Back to viewer</button></div>
+  </div>
+  <div id="an-body"><div class="placeholder">Open or generate a case first.</div></div>
+</section>
 
 <!-- ======================= MODEL PAGE ======================= -->
 <section id="page-model" class="page hidden">

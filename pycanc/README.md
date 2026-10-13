@@ -24,6 +24,10 @@ PyCanc is a from-scratch re-implementation of that model, plus a full imaging wo
   slice-thickness limit).
 * **Clinical risk.** PLCOm2012 (age, smoking, COPD, family history…) side by side with the image risk, plus an
   image + clinical fusion model you can fit on your own outcomes.
+* **Quantitative scan analysis at native resolution.** Automatic nodule detection and 3D measurement (size, volume,
+  solid component, type, margin, density, shape), Lung-RADS v2022 categories with management, Brock/PanCan
+  malignancy probability, emphysema quantification (LAA-950/910, Perc15, per lung zone), CT-physics quality checks
+  (noise, calibration, kernel, coverage, inspiration) and growth / volume doubling time between two scans.
 * **Measurement tools.** `pycanc.evaluate` reports AUC with 95% CIs, C-index, Brier score and calibration, and can fit a
   local calibrator or fusion model.
 * **Fast on any hardware.** Uses CUDA (FP16), Apple-silicon GPU (MPS) or CPU automatically.
@@ -31,6 +35,7 @@ PyCanc is a from-scratch re-implementation of that model, plus a full imaging wo
 
 ![welcome](docs/welcome.png)
 ![workstation](docs/workstation.png)
+![analysis](docs/analysis.png)
 
 ## Quick start
 
@@ -101,6 +106,28 @@ picked up automatically by the CLI and the workstation.
 | `--tta 3` / `--tta 5` | averages predictions over shifted and rotated copies and adds the spread to the uncertainty range | 3–5× time |
 | `--device mps` | Apple-silicon GPU (picked automatically when it works) | — |
 
+## Scan analysis (Analysis tab)
+
+Runs automatically in the background on every loaded scan (about 7 s for a 256² phantom, about 25 s for a 512² CT on CPU).
+
+| Measure | Method | Source |
+|---|---|---|
+| Nodule detection | multiscale Hessian dot filter, plus a ground-glass density detector, then vessel / hilum rejection | Li, Sone & Doi, *Med Phys* 2003 |
+| Nodule size | long and short axis on the axial slice of largest area, mean diameter, volume; spicules excluded from size | Lung-RADS v2022 |
+| Type | solid / part-solid / ground-glass / calcified, with a solid component above −300 HU | Lung-RADS v2022 |
+| Margin | smooth / lobulated / spiculated from spicule count and outline convexity (estimate) | — |
+| Category | Lung-RADS v2022 baseline category and management | ACR |
+| Malignancy | Brock / PanCan full model (age, sex, family history, emphysema, size, type, upper zone, count, spiculation) | McWilliams et al., *NEJM* 2013 |
+| Emphysema | LAA-950 %, LAA-910 %, Perc15, mean lung density, per lung and upper / middle / lower zone, density histogram | quantitative CT literature |
+| CT physics | tissue / air noise, air calibration, kernel sharpness, slice spacing, coverage, lung volume, quality score | — |
+| Growth | nodule matching between scans, % volume change, volume doubling time (< 400 d suspicious) | VDT = Δt·ln2 / ln(V₂/V₁) |
+
+**How good is it?** On 16 fresh synthetic phantoms with random nodules (none of them used for tuning), it found
+11 of 16 nodules with 0.5 false positives per scan. For the nodules it found, type was right in 10 of 11, margin in
+7 of 7, and size was within about 1–3 mm. It mainly misses 5 mm nodules, ground-glass nodules surrounded by heavy
+emphysema, and some nodules touching the chest wall. These are phantom results only. It has not been validated on
+real patient scans, so every finding needs a radiologist's confirmation.
+
 ## Using the workstation
 
 | Action | How |
@@ -141,6 +168,7 @@ pycanc/
   clinical.py    PLCOm2012 clinical risk model
   fusion.py      image + clinical logistic fusion (fit locally)
   evaluate.py    AUC / C-index / calibration, local recalibration and fusion fitting
+  analysis.py    nodule detection + measurement, Lung-RADS, Brock, emphysema, CT physics, growth / VDT
   phantom.py     procedural low-dose chest CT with a configurable nodule
   train.py       survival + attention-guided training / fine-tuning, C-index evaluation
   cli.py         download / predict / serve

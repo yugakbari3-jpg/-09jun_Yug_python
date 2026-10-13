@@ -18,7 +18,7 @@
   const S = {
     status: null, cases: [], caseId: null, vol: null, valid: [0, D - 1],
     cur: { z: 100, y: 128, x: 128 }, attn: null, result: null,
-    win: "model", ov: true, op: 0.7, gt: true, nModels: 1, tta: 1, patients: {}, clinical: null, poll: null, active: "axial", hover: null,
+    win: "model", ov: true, op: 0.7, gt: true, nModels: 1, tta: 1, patients: {}, clinical: null, analysis: null, fnd: true, emo: false, anPoll: null, poll: null, active: "axial", hover: null,
   };
 
   // ------------------------------------------------------------------ utils
@@ -90,8 +90,10 @@
       if (v.kind === "axial") { vz = z; vy = r; vx = c; }
       else if (v.kind === "coronal") { vz = z0 + r; vy = y; vx = c; }
       else { vz = z0 + r; vy = c; vx = x; }
-      const g = L[vol[vz * 65536 + vy * 256 + vx]], o = (r * w + c) * 4;
-      img.data[o] = g; img.data[o + 1] = g; img.data[o + 2] = g; img.data[o + 3] = 255;
+      const vi = vz * 65536 + vy * 256 + vx, g = L[vol[vi]], o = (r * w + c) * 4;
+      if (S.emo && S.vol.mask[vi] && S.vol.wide[vi] <= 5) { img.data[o] = g * 0.35 + 20; img.data[o + 1] = g * 0.35 + 120; img.data[o + 2] = 255; }
+      else { img.data[o] = g; img.data[o + 1] = g; img.data[o + 2] = g; }
+      img.data[o + 3] = 255;
       if (withA) {
         const a = Math.pow(attnAt(vz, vy, vx), 0.55);
         if (a > 0.06) {
@@ -147,6 +149,18 @@
         ctx.fillText("TRUE NODULE", p[0] + rr + 4, p[1] - rr + 6);
       }
     }
+    // detected nodules
+    if (S.fnd && S.analysis) S.analysis.nodules.forEach(n => {
+      const [nz, ny, nx] = n.model_zyx, r = n.mean_diameter_mm / 2;
+      const dist = v.kind === "axial" ? Math.abs(nz - z) * SL : v.kind === "coronal" ? Math.abs(ny - y) * PX : Math.abs(nx - x) * PX;
+      if (dist > r + 2) return;
+      const p = v.kind === "axial" ? P(nx, ny) : v.kind === "coronal" ? P(nx, nz - z0) : P(ny, nz - z0);
+      const half = r * s + 7, col = RADS_COL(n.lung_rads);
+      ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.shadowColor = col; ctx.shadowBlur = 6;
+      ctx.beginPath(); ctx.roundRect(p[0] - half, p[1] - half, half * 2, half * 2, 5); ctx.stroke(); ctx.restore();
+      ctx.fillStyle = col; ctx.font = "700 10.5px JetBrains Mono, monospace";
+      ctx.fillText(`${n.id} · ${n.mean_diameter_mm.toFixed(1)}mm · LR ${n.lung_rads}`, p[0] - half, p[1] + half + 13);
+    });
     // hotspots
     if (S.result && S.ov) S.result.hotspots.forEach((hs, i) => {
       const dist = v.kind === "axial" ? Math.abs(hs.z - z) * SL : v.kind === "coronal" ? Math.abs(hs.y - y) * PX : Math.abs(hs.x - x) * PX;
@@ -249,6 +263,8 @@
   $("#win").onchange = e => { S.win = e.target.value; scheduleRender(); };
   $("#ov").onchange = e => { S.ov = e.target.checked; if (r3d) { r3d.attnOn = S.ov; r3d.dirty = true; } scheduleRender(); };
   $("#ov-op").oninput = e => { S.op = +e.target.value; if (r3d) { r3d.attnGain = 0.3 + S.op * 1.2; r3d.dirty = true; } scheduleRender(); };
+  $("#fnd").onchange = e => { S.fnd = e.target.checked; Object.values(views).forEach(drawView); };
+  $("#emo").onchange = e => { S.emo = e.target.checked; scheduleRender(); };
   $("#gt").onchange = e => { S.gt = e.target.checked; Object.values(views).forEach(drawView); };
 
   // ------------------------------------------------------------------ phantom controls
@@ -261,6 +277,7 @@
   }));
   $("#p-mm").oninput = e => $("#o-mm").textContent = `${e.target.value} mm`;
   $("#p-lvl").oninput = e => { const v = +e.target.value; $("#o-lvl").textContent = v < 0.34 ? "upper" : v < 0.67 ? "middle" : "lower"; };
+  $("#p-emph").oninput = e => { const v = +e.target.value; $("#o-emph").textContent = v ? `${Math.round(v * 100)}%` : "none"; };
   $("#p-nod").onchange = e => $("#nod-ctrls").style.opacity = e.target.checked ? 1 : 0.35;
   $("#dice").onclick = () => $("#p-seed").value = Math.floor(Math.random() * 9999);
   $("#gen").onclick = () => createPhantom();
@@ -268,7 +285,7 @@
   async function createPhantom(params) {
     const body = params || {
       seed: +$("#p-seed").value || 0, nodule: $("#p-nod").checked, nodule_mm: +$("#p-mm").value,
-      nodule_type: segVal("p-type"), spiculated: $("#p-spic").checked, nodule_side: segVal("p-side"), nodule_level: +$("#p-lvl").value,
+      nodule_type: segVal("p-type"), spiculated: $("#p-spic").checked, nodule_side: segVal("p-side"), nodule_level: +$("#p-lvl").value, emphysema: +$("#p-emph").value,
     };
     showEmpty("Synthesising chest CT…");
     $("#gen").disabled = true;
@@ -321,7 +338,8 @@
     S.vol = { lung, wide, mask }; S.valid = c.valid;
     const nod = c.meta?.nodule?.model_zyx;
     S.cur = nod ? { z: nod[0], y: nod[1], x: nod[2] } : { z: Math.round((c.valid[0] + c.valid[1]) / 2), y: 128, x: 128 };
-    S.attn = null; S.result = null;
+    S.attn = null; S.result = null; S.analysis = null;
+    $("#findings").innerHTML = `<div class="an-wait"><div class="spinner sm"></div>Analysing scan…</div>`;
     if (r3d) { r3d.setVolume(wide, mask, [D, H, W], c.valid); r3d.clearAttention(); }
     hideEmpty();
     await refreshCases();
@@ -330,6 +348,7 @@
     if (c.job?.state === "done") applyResult(c.job.result);
     else if (c.job?.state === "running" || c.job?.state === "queued") startPoll();
     else setPipe(null);
+    loadAnalysis();
   }
 
   // ------------------------------------------------------------------ predict
@@ -379,7 +398,7 @@
     if (r3d) r3d.setAttention(u8, res.attention_shape);
     const h = res.hotspots[0];
     if (h) S.cur = { z: h.z, y: h.y, x: h.x };
-    renderResult(res); setPipe("done"); renderAll();
+    renderResult(res); setPipe("done"); renderAll(); loadAnalysis();
   }
 
   // ------------------------------------------------------------------ results panel
@@ -530,7 +549,7 @@
   $("#c-smk").onchange();
   function patientForm() {
     return {
-      age: +cv("#c-age"), bmi: +cv("#c-bmi"), smoking_status: cv("#c-smk"), cigarettes_per_day: +cv("#c-cpd"),
+      age: +cv("#c-age"), sex: cv("#c-sex"), bmi: +cv("#c-bmi"), smoking_status: cv("#c-smk"), cigarettes_per_day: +cv("#c-cpd"),
       smoking_years: +cv("#c-yrs"), years_since_quit: cv("#c-smk") === "former" ? +cv("#c-quit") : 0,
       education: cv("#c-edu"), race: cv("#c-race"), copd: $("#c-copd").checked,
       family_lung_cancer: $("#c-fam").checked, personal_cancer_history: $("#c-hx").checked,
@@ -540,6 +559,7 @@
     if (!S.caseId) return toast("Load a case first");
     S.patients[S.caseId] = patientForm();
     await renderClinical();
+    loadAnalysis();
   };
   async function renderClinical() {
     const el = $("#clin"), pt = S.patients[S.caseId];
@@ -600,10 +620,158 @@
   };
 
   // ------------------------------------------------------------------ pages
+  // ------------------------------------------------------------------ scan analysis
+  const RADS_COL = c => ({ "1": "#3dffa8", "2": "#3dffa8", "3": "#ffb547", "4A": "#ff8a5c", "4B": "#ff4d7d", "4X": "#ff4d7d" }[c] || "#3be0ff");
+  const fmt = (v, d = 1) => v == null || Number.isNaN(v) ? "—" : (+v).toFixed(d);
+  async function loadAnalysis() {
+    clearTimeout(S.anPoll);
+    const id = S.caseId; if (!id) return;
+    let r;
+    try { r = await (await api(`/api/cases/${id}/analysis`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patient: S.patients[id] || null }) })).json(); }
+    catch (e) { return; }
+    if (S.caseId !== id) return;
+    if (r.state !== "done") {
+      S.analysis = null;
+      $("#findings").innerHTML = r.state === "error" ? `<div class="placeholder">Analysis failed: ${r.error}</div>`
+        : `<div class="an-wait"><div class="spinner sm"></div>${r.progress || "Analysing"}…</div>`;
+      if (r.state !== "error") S.anPoll = setTimeout(loadAnalysis, 1200);
+      if (!$("#page-analysis").classList.contains("hidden")) renderAnalysisPage(r);
+      return;
+    }
+    S.analysis = r.result; S.analysisSeconds = r.seconds;
+    renderFindingsCard(); Object.values(views).forEach(drawView);
+    if (!$("#page-analysis").classList.contains("hidden")) renderAnalysisPage();
+  }
+
+  function renderFindingsCard() {
+    const a = S.analysis, el = $("#findings");
+    if (!a) return;
+    const cat = a.lung_rads.category, big = a.nodules[0], e = a.emphysema.whole || {}, q = a.ct_physics;
+    el.innerHTML = `
+      <div class="f-top"><div class="rads" style="--c:${RADS_COL(cat)}"><span>Lung-RADS</span><b>${cat}</b></div>
+        <div class="f-txt">${a.lung_rads.management}</div></div>
+      <div class="cmp">
+        <div><b>${a.nodules.length}</b><span>nodule${a.nodules.length === 1 ? "" : "s"}</span></div>
+        <div><b>${big ? fmt(big.mean_diameter_mm) + "mm" : "—"}</b><span>largest</span></div>
+        <div><b>${fmt(e.laa950_pct)}%</b><span>emphysema</span></div>
+      </div>
+      <div class="f-q"><span>Image quality</span><div class="meter"><i style="width:${q.quality_score}%"></i></div><b>${q.quality_score}</b></div>
+      <button class="btn wide" id="f-open">Full analysis →</button>`;
+    $("#f-open").onclick = () => goPage("analysis");
+  }
+
+  function thumb(n) {
+    const c = document.createElement("canvas"), N = 44; c.width = c.height = N;
+    if (!S.vol) return c;
+    const ctx = c.getContext("2d"), img = ctx.createImageData(N, N), [z, y, x] = n.model_zyx;
+    for (let r = 0; r < N; r++) for (let q = 0; q < N; q++) {
+      const yy = clamp(y - N / 2 + r, 0, 255), xx = clamp(x - N / 2 + q, 0, 255), g = S.vol.lung[z * 65536 + yy * 256 + xx], o = (r * N + q) * 4;
+      img.data[o] = img.data[o + 1] = img.data[o + 2] = g; img.data[o + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    ctx.strokeStyle = RADS_COL(n.lung_rads); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(N / 2, N / 2, n.mean_diameter_mm / 2 / PX + 3, 0, 7); ctx.stroke();
+    return c;
+  }
+
+  function hist(e) {
+    const h = e.histogram; if (!h) return "";
+    const W2 = 520, H2 = 150, mx = Math.max(...h.counts), n = h.counts.length;
+    const X = v => (v - h.edges[0]) / (h.edges[n] - h.edges[0]) * W2;
+    let g = h.counts.map((c, i) => { const x0 = X(h.edges[i]), x1 = X(h.edges[i + 1]), hh = c / mx * (H2 - 24);
+      const col = h.edges[i] < -950 ? "#3b8cff" : h.edges[i] < -910 ? "#8b6bff" : "#3be0ff";
+      return `<rect x="${x0 + 0.5}" y="${H2 - 18 - hh}" width="${x1 - x0 - 1}" height="${hh}" fill="${col}" opacity=".8"/>`; }).join("");
+    for (const [v, l] of [[-950, "−950"], [-910, "−910"], [-856, "−856"]]) g += `<line x1="${X(v)}" x2="${X(v)}" y1="4" y2="${H2 - 18}" stroke="#ffb547" stroke-dasharray="3 3"/><text x="${X(v) + 3}" y="12" fill="#ffb547" font-size="10" font-family="JetBrains Mono">${l}</text>`;
+    for (const v of [-1000, -900, -800, -700, -600, -500]) g += `<text x="${X(v)}" y="${H2 - 4}" fill="#56617f" font-size="10" text-anchor="middle" font-family="JetBrains Mono">${v}</text>`;
+    return `<svg viewBox="0 0 ${W2} ${H2}" class="histo">${g}</svg>`;
+  }
+
+  function renderAnalysisPage(pending) {
+    const body = $("#an-body"), c = currentCase();
+    if (!c) { body.innerHTML = `<div class="placeholder">Open or generate a case first.</div>`; return; }
+    $("#an-sub").textContent = `${c.name} · ${c.meta?.source || ""} · ${c.shape[0]} slices of ${c.shape[1]}×${c.shape[2]} at ${c.spacing.map(v => (+v).toFixed(2)).join(" × ")} mm — measured at native resolution${S.analysisSeconds ? ` in ${S.analysisSeconds}s` : ""}.`;
+    const a = S.analysis;
+    if (!a) { body.innerHTML = `<div class="an-wait big"><div class="spinner"></div>${pending?.progress || "Analysing"}…</div>`; return; }
+    const cat = a.lung_rads.category, e = a.emphysema, q = a.ct_physics, pt = S.patients[S.caseId];
+    const zone = k => { const z = e.zones?.[k]; if (!z) return `<div class="zc"><b>—</b></div>`;
+      const v = z.laa950_pct, t = clamp(v / 30, 0, 1);
+      return `<div class="zc" style="background:rgba(59,140,255,${0.08 + 0.6 * t})"><b>${fmt(v)}%</b><span>${fmt(z.volume_l, 2)} L · P15 ${fmt(z.perc15_hu, 0)}</span></div>`; };
+    const priors = S.cases.filter(x => x.id !== c.id);
+    body.innerHTML = `
+    <div class="an-grid three">
+      <div class="an-card"><h4>Lung-RADS v2022</h4>
+        <div class="rads big" style="--c:${RADS_COL(cat)}"><span>category</span><b>${cat}</b></div>
+        <p>${a.lung_rads.management}</p><p class="small">${a.lung_rads.note}</p></div>
+      <div class="an-card"><h4>Emphysema</h4>
+        <div class="kpi"><b>${fmt(e.whole?.laa950_pct)}%</b><span>LAA-950 · ${e.severity || "—"}</span></div>
+        <div class="kv"><span>LAA-910</span><b>${fmt(e.whole?.laa910_pct)}%</b><span>Perc15</span><b>${fmt(e.whole?.perc15_hu, 0)} HU</b>
+          <span>Mean lung density</span><b>${fmt(e.whole?.mean_hu, 0)} HU</b><span>Lung volume</span><b>${fmt(e.whole?.volume_l, 2)} L</b></div>
+        <p class="small">${e.distribution || ""}</p></div>
+      <div class="an-card"><h4>Image quality · CT physics</h4>
+        <div class="kpi"><b>${q.quality_score}</b><span>/ 100 quality score</span></div>
+        <div class="kv"><span>Noise (tissue)</span><b>${fmt(q.noise_tissue_hu)} HU · ${q.noise_level || ""}</b><span>Air</span><b>${fmt(q.air_hu, 0)} HU</b>
+          <span>Kernel (est.)</span><b>${q.kernel_estimate || "—"}</b><span>Slices</span><b>${q.slices} × ${q.slice_spacing_mm} mm</b></div>
+        ${q.flags.length ? q.flags.map(f => `<div class="flag">⚠ ${f.msg}</div>`).join("") : `<div class="flag ok">✓ No quality issues detected</div>`}</div>
+    </div>
+
+    <div class="an-card"><h4>Nodules <span class="cnt">${a.nodules.length} found</span>
+      ${pt ? "" : `<span class="hint2">Add sex, age and family history in the Patient form for a personalised Brock score</span>`}</h4>
+      ${a.nodules.length ? `<div class="tbl-wrap"><table class="ntab"><thead><tr><th></th><th>ID</th><th>Location</th><th>Size (long × short)</th><th>Mean Ø</th><th>Volume</th><th>Type</th><th>Solid Ø</th><th>Margin</th><th>Density</th><th>Shape</th><th>Lung-RADS</th><th>Brock</th><th>PyCanc attention</th></tr></thead><tbody>
+      ${a.nodules.map((n, i) => `<tr data-i="${i}"><td class="th"></td><td><b>${n.id}</b></td>
+        <td>${n.side} ${n.zone}${n.juxtapleural ? " · juxtapleural" : ""}<div class="small">${fmt(n.pleural_distance_mm)} mm to pleura</div></td>
+        <td>${fmt(n.long_axis_mm)} × ${fmt(n.short_axis_mm)} mm</td><td><b>${fmt(n.mean_diameter_mm)} mm</b></td>
+        <td>${fmt(n.volume_mm3, 0)} mm³</td><td>${n.type}</td><td>${n.type === "part-solid" ? fmt(n.solid_mean_diameter_mm) + " mm" : "—"}</td>
+        <td>${n.margin}</td><td>${fmt(n.mean_hu, 0)} ± ${fmt(n.std_hu, 0)} HU</td>
+        <td><div class="small">sphericity ${fmt(n.sphericity, 2)}<br>solidity ${fmt(n.solidity, 2)}</div></td>
+        <td><span class="chip-r" style="--c:${RADS_COL(n.lung_rads)}">${n.lung_rads}</span></td>
+        <td>${n.brock ? `<b>${fmt(n.brock.probability * 100)}%</b>${n.brock.assumed_defaults.length ? `<div class="small">assumed: ${n.brock.assumed_defaults.join(", ")}</div>` : ""}` : "—"}</td>
+        <td>${n.attention ? `<span class="chip-r" style="--c:#ffb547">hotspot ${n.attention.hotspot} · ${Math.round(n.attention.score * 100)}%</span>` : S.result ? "<span class='small'>not a hotspot</span>" : "<span class='small'>run prediction</span>"}</td></tr>`).join("")}
+      </tbody></table></div>` : `<div class="placeholder">No nodules of 3 mm or more detected.</div>`}
+    </div>
+
+    <div class="an-grid two">
+      <div class="an-card"><h4>Emphysema by zone <span class="hint2">LAA-950 %</span></h4>
+        <div class="zones"><div></div><div class="zh">Right lung</div><div class="zh">Left lung</div>
+          ${["upper", "middle", "lower"].map(z => `<div class="zh v">${z}</div>${zone("right_" + z)}${zone("left_" + z)}`).join("")}</div>
+        <h4 style="margin-top:16px">Lung density histogram</h4>${hist(e)}</div>
+      <div class="an-card"><h4>Growth · volume doubling time</h4>
+        ${priors.length ? `<div class="cmpf"><label>Prior scan<select class="sel" id="g-prior">${priors.map(x => `<option value="${x.id}">${x.name}</option>`).join("")}</select></label>
+          <label>Days between scans<input class="num" type="number" id="g-days" value="365" min="1"></label><button class="btn" id="g-go">Compare</button></div>
+          <div id="g-out" class="small" style="margin-top:12px">Pick the earlier scan of the same patient.</div>`
+        : `<p class="small">Load a second (earlier) scan of the same patient to measure growth. A volume doubling time under 400 days is suspicious; over 600 days, or no growth, suggests a benign course.</p>`}
+      </div>
+    </div>
+
+    <details class="an-card refs"><summary>Methods &amp; references</summary><ul>
+      <li><b>Nodule detection</b>: multiscale Hessian dot-enhancement filter (Li, Sone &amp; Doi, Med Phys 2003), then 3D segmentation with adaptive vessel detachment at native resolution.</li>
+      <li><b>Measurement &amp; categories</b>: ACR Lung-RADS v2022 (mean of long and short axis on the axial slice of largest area; solid component above −300 HU).</li>
+      <li><b>Malignancy</b>: Brock / PanCan full model with spiculation (McWilliams et al., NEJM 2013). Upper zone stands in for upper lobe; emphysema and spiculation are automatic estimates.</li>
+      <li><b>Emphysema</b>: % low-attenuation area below −950 HU and the 15th percentile of lung density (Perc15), common quantitative CT measures; low-dose noise can bias them.</li>
+      <li><b>Growth</b>: volume doubling time VDT = Δt·ln2 / ln(V₂/V₁).</li>
+      <li><b>Clinical</b>: PLCOm2012 (Tammemägi et al., NEJM 2013). <b>Deep learning risk</b>: Sybil (Mikhael et al., JCO 2023).</li>
+      <li>All values are automatic research estimates and must be confirmed by a radiologist.</li></ul></details>`;
+    $$(".ntab tbody tr").forEach(tr => {
+      const n = a.nodules[+tr.dataset.i]; tr.querySelector(".th").appendChild(thumb(n));
+      tr.onclick = () => { S.cur = { z: n.model_zyx[0], y: n.model_zyx[1], x: n.model_zyx[2] }; goPage("workspace"); scheduleRender(); };
+    });
+    $("#g-go") && ($("#g-go").onclick = async () => {
+      const out = $("#g-out");
+      try {
+        const r = await (await api(`/api/cases/${c.id}/compare`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prior_id: cv("#g-prior"), interval_days: +cv("#g-days") }) })).json();
+        out.innerHTML = `<table class="ntab"><thead><tr><th>Nodule</th><th>Prior</th><th>Volume now / before</th><th>Change</th><th>VDT</th><th>Assessment</th></tr></thead><tbody>${r.nodules.map(g => `<tr><td><b>${g.id}</b></td><td>${g.prior_id || "—"}</td>
+          <td>${fmt(g.current_volume_mm3, 0)}${g.prior_volume_mm3 ? " / " + fmt(g.prior_volume_mm3, 0) : ""} mm³</td><td>${g.volume_change_pct != null ? (g.volume_change_pct > 0 ? "+" : "") + g.volume_change_pct + "%" : "—"}</td>
+          <td>${g.vdt_days ? g.vdt_days + " d" : "—"}</td><td>${g.status}${g.lung_rads_growth ? `<div class="small">${g.lung_rads_growth}</div>` : ""}</td></tr>`).join("")}</tbody></table>
+          ${r.resolved_prior_nodules.length ? `<p class="small">Resolved since prior: ${r.resolved_prior_nodules.join(", ")}</p>` : ""}`;
+      } catch (err) { out.textContent = err.message; }
+    });
+  }
+  $("#an-ws").onclick = () => goPage("workspace");
+
   function goPage(page) {
     $$(".tabs button").forEach(x => x.classList.toggle("active", x.dataset.page === page));
-    ["home", "workspace", "model", "about"].forEach(p => $(`#page-${p}`).classList.toggle("hidden", p !== page));
+    ["home", "workspace", "analysis", "model", "about"].forEach(p => $(`#page-${p}`).classList.toggle("hidden", p !== page));
     window.scrollTo({ top: 0 });
+    if (page === "analysis") renderAnalysisPage();
     if (page === "workspace") requestAnimationFrame(() => { Object.values(views).forEach(drawView); if (r3d) r3d.dirty = true; });
   }
   $$(".tabs button").forEach(b => b.onclick = () => goPage(b.dataset.page));

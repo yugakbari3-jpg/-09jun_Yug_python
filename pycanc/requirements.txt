@@ -6,6 +6,7 @@ pydicom>=2.4
 fastapi>=0.110
 uvicorn>=0.27
 python-multipart>=0.0.9
+scikit-image>=0.21
 # optional: NIfTI input
 nibabel>=5.0
 # tests

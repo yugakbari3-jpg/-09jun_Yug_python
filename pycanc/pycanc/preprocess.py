@@ -187,6 +187,39 @@ def to_model_coords(ct: CTVolume, z_mm: float, y_mm: float, x_mm: float) -> tupl
     return tuple(out)
 
 
+def _axes(ct: CTVolume):
+    """Per axis: (physical extent in model voxels, model voxel size mm, target size, centred)."""
+    Z, Y, X = ct.hu.shape
+    sz, sy, sx = ct.spacing
+    pz = TARGET_SPACING[0]
+    py = TARGET_SPACING[1] * 512 / IMG_SIZE
+    px = TARGET_SPACING[2] * 512 / IMG_SIZE
+    return [(Z * sz / pz, pz, NUM_IMAGES, False), (Y * sy / py, py, IMG_SIZE, True), (X * sx / px, px, IMG_SIZE, True)]
+
+
+def from_model_coords(ct: CTVolume, z: float, y: float, x: float) -> tuple[float, float, float]:
+    """Inverse of to_model_coords: model-grid voxel -> physical mm (z from first slice, y/x from centre)."""
+    out = []
+    for idx, (n_src, spacing, n_tgt, centred) in zip((z, y, x), _axes(ct)):
+        n = max(1, round(n_src))
+        off = (n_tgt - n) // 2 if n < n_tgt else -((n - n_tgt) // 2)
+        out.append((idx - off - (n / 2 if centred else 0)) * spacing)
+    return tuple(out)
+
+
+def mm_to_native(ct: CTVolume, z_mm: float, y_mm: float, x_mm: float) -> tuple[int, int, int]:
+    Z, Y, X = ct.hu.shape
+    sz, sy, sx = ct.spacing
+    return (int(np.clip(round(z_mm / sz), 0, Z - 1)), int(np.clip(round(y_mm / sy + Y / 2), 0, Y - 1)),
+            int(np.clip(round(x_mm / sx + X / 2), 0, X - 1)))
+
+
+def native_to_mm(ct: CTVolume, z: float, y: float, x: float) -> tuple[float, float, float]:
+    Z, Y, X = ct.hu.shape
+    sz, sy, sx = ct.spacing
+    return (z * sz, (y - Y / 2) * sy, (x - X / 2) * sx)
+
+
 def apply_windowing(hu: np.ndarray, center=WINDOW_CENTER, width=WINDOW_WIDTH, bit_size=16) -> np.ndarray:
     y_max = 2 ** bit_size - 1
     c, w = center - 0.5, width - 1
@@ -203,6 +236,7 @@ class Prepared:
     wide: np.ndarray        # (200, 256, 256) uint8, HU -1000..1500 on the same grid (for 3D / other windows)
     lung_mask: np.ndarray   # (200, 256, 256) uint8 {0, 255}
     valid: tuple[int, int]  # first/last slice index that contains real data
+    hu_grid: np.ndarray | None = None  # (200, 256, 256) float16 HU on the model grid
 
 WIDE_LO, WIDE_HI = -1000.0, 1500.0
 
@@ -237,23 +271,54 @@ def _to_model_grid(vol: np.ndarray, spacing, fill: float) -> tuple[torch.Tensor,
     return out, zmask
 
 
-def lung_segmentation(hu: np.ndarray) -> np.ndarray:
-    """Rough lung mask: low-density components not touching the border, holes filled."""
+def body_mask(hu: np.ndarray) -> np.ndarray:
+    """Patient body: largest dense component, every slice hole-filled (excludes the table and outside air)."""
     from scipy import ndimage as ndi
 
-    air = hu < -400
+    dense = ndi.binary_opening(hu > -500, iterations=1)
+    lab, n = ndi.label(dense)
+    if n == 0:
+        return np.zeros_like(dense)
+    sizes = ndi.sum(dense, lab, index=np.arange(1, n + 1))
+    body = lab == (np.argmax(sizes) + 1)
+    for z in range(body.shape[0]):
+        body[z] = ndi.binary_fill_holes(body[z])
+    return body
+
+
+def lung_segmentation(hu: np.ndarray, spacing=None, ball_mm: float = 10.0) -> np.ndarray:
+    """Lungs = the two largest low-density components inside the body, closed and hole-filled."""
+    from scipy import ndimage as ndi
+
+    air = (hu < -400) & ndi.binary_erosion(body_mask(hu), iterations=2)
     lab, n = ndi.label(air)
     if n == 0:
         return np.zeros_like(air)
-    border = np.unique(np.concatenate([lab[:, 0].ravel(), lab[:, -1].ravel(), lab[:, :, 0].ravel(), lab[:, :, -1].ravel()]))
     sizes = ndi.sum(air, lab, index=np.arange(1, n + 1))
-    sizes[border[border > 0] - 1] = 0
     keep = np.argsort(sizes)[::-1][:2]
-    keep = keep[sizes[keep] > 0.05 * sizes.max()] + 1 if sizes.max() > 0 else []
+    keep = keep[sizes[keep] > 0.05 * sizes.max()] + 1
     mask = np.isin(lab, keep)
     mask = ndi.binary_closing(mask, iterations=2)
+    # rolling-ball closing, per slice and per lung, so nodules touching the pleura stay inside the mask
+    py = max(1, int(round(ball_mm / spacing[1]))) if spacing else 6
+    yy, xx = np.ogrid[-py:py + 1, -py:py + 1]
+    disk = yy ** 2 + xx ** 2 <= py ** 2
     for z in range(mask.shape[0]):
-        mask[z] = ndi.binary_fill_holes(mask[z])
+        sl = ndi.binary_fill_holes(mask[z])
+        l2, n2 = ndi.label(sl)
+        out = sl.copy()
+        for k in range(1, n2 + 1):
+            comp = l2 == k
+            if comp.sum() < 50:
+                continue
+            ys, xs = np.nonzero(comp)
+            pad = py + 1
+            y0, y1 = max(0, ys.min() - pad), min(sl.shape[0], ys.max() + pad + 1)
+            x0, x1 = max(0, xs.min() - pad), min(sl.shape[1], xs.max() + pad + 1)
+            sub = np.pad(comp[y0:y1, x0:x1], pad)
+            closed = ndi.binary_closing(sub, structure=disk)[pad:-pad, pad:-pad]
+            out[y0:y1, x0:x1] |= ndi.binary_fill_holes(closed) & (hu[z, y0:y1, x0:x1] > -1100)
+        mask[z] = out
     return mask
 
 
@@ -268,7 +333,9 @@ def preprocess(ct: CTVolume) -> Prepared:
     hu, _ = _to_model_grid(ct.hu, ct.spacing, fill=-1000.0)
     hu = hu.numpy()
     wide = np.clip((hu - WIDE_LO) / (WIDE_HI - WIDE_LO) * 255, 0, 255).round().astype(np.uint8)
-    lungs = lung_segmentation(hu)
+    seg = hu.copy()
+    seg[~zmask.numpy()] = 0.0       # padded slices must not connect the airways to "outside" air
+    lungs = lung_segmentation(seg, (TARGET_SPACING[0], TARGET_SPACING[1] * 2, TARGET_SPACING[2] * 2))
 
     idx = torch.nonzero(zmask).flatten()
     return Prepared(
@@ -277,4 +344,5 @@ def preprocess(ct: CTVolume) -> Prepared:
         wide=wide,
         lung_mask=(lungs * 255).astype(np.uint8),
         valid=(int(idx[0]), int(idx[-1])),
+        hu_grid=hu.astype(np.float16),
     )

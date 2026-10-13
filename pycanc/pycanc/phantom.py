@@ -47,6 +47,7 @@ def make_phantom(
     spiculated: bool = True,
     nodule_side: str = "right",      # patient side
     nodule_level: float = 0.35,      # 0 = apex, 1 = base
+    emphysema: float = 0.0,          # 0..0.5, fraction of lung destroyed (upper-zone predominant)
     shape=(128, 256, 256),
     spacing=(2.5, 1.40625, 1.40625),
 ) -> CTVolume:
@@ -99,6 +100,17 @@ def make_phantom(
     # gravity-dependent density gradient (posterior lungs slightly denser)
     grad = np.broadcast_to(30 * (y / 100), shape)
     vol[lungs] += grad[lungs]
+
+    # ---------------- emphysema: clustered low-attenuation areas, upper zones first
+    if emphysema > 0:
+        field = rng.normal(0, 1, shape).astype(np.float32)
+        for ax_ in range(3):
+            for _ in range(3):
+                field = (field + np.roll(field, 1, ax_) + np.roll(field, -1, ax_)) / 3
+        field = field / (field[lungs].std() + 1e-6) + np.broadcast_to(1.2 * (0.6 - zn), shape)
+        thr = np.quantile(field[lungs], 1 - emphysema)
+        bullae = lungs & (field > thr)
+        vol[bullae] = -975 + 12 * tex[bullae]
 
     # ---------------- mediastinum -------------------------------------------
     heart = (((x - 22) / 62) ** 2 + ((y + 12) / 52) ** 2 + ((z - 0.66 * zlen) / (0.22 * zlen)) ** 2) < 1
@@ -189,11 +201,11 @@ def make_phantom(
         # lobulated surface
         ang = np.arctan2(y - c[1], x - c[2])
         lob = R * (1 + 0.12 * np.sin(3 * ang + 1.3) + 0.08 * np.sin(5 * ang))
-        ggo_shell = d < lob * 1.6
+        ggo_shell = d < lob
         if nodule_type in ("part-solid", "ground-glass"):
             vol[ggo_shell & lungs] = np.maximum(vol[ggo_shell & lungs], -520 + 30 * tex[ggo_shell & lungs])
         if nodule_type in ("solid", "part-solid"):
-            core = d < (lob if nodule_type == "solid" else lob * 0.55)
+            core = d < (lob if nodule_type == "solid" else lob * 0.5)
             vol[core] = 38 + 12 * tex[core]
         if spiculated:
             for _ in range(14):
@@ -209,5 +221,5 @@ def make_phantom(
     vol[body] += noise[body]
     vol[~body] += noise[~body] * 0.3
 
-    meta = {"source": "Synthetic phantom", "num_slices": Z, "nodule": nod_info, "seed": seed}
+    meta = {"source": "Synthetic phantom", "num_slices": Z, "nodule": nod_info, "seed": seed, "emphysema": emphysema}
     return CTVolume(vol.astype(np.float32), tuple(spacing), meta)

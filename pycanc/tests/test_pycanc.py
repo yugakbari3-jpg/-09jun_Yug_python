@@ -121,3 +121,33 @@ def test_quality_checks_flag_thick_slices():
     ct = CTVolume(np.full((40, 64, 64), -800, np.float32), (5.0, 6.0, 6.0))
     ct.hu[:, 20:40, 20:40] = 40
     assert any("Slice spacing" in w for w in quality_checks(ct))
+
+
+def test_analysis_finds_measures_and_tracks_growth():
+    from pycanc.analysis import analyze, brock, compare, lung_rads
+    # same seed and emphysema so the nodule sits in the same place on both scans
+    prior_ct = make_phantom(seed=7, nodule_mm=10, spiculated=False, emphysema=0.2)
+    cur_ct = make_phantom(seed=7, nodule_mm=12, spiculated=False, emphysema=0.2)
+    prior, cur = analyze(prior_ct, preprocess(prior_ct)), analyze(cur_ct, preprocess(cur_ct))
+    n = cur["nodules"][0]
+    assert np.linalg.norm(np.array(n["center_mm"]) - cur_ct.meta["nodule"]["center_mm"]) < 3
+    assert 11 <= n["mean_diameter_mm"] <= 14.5 and n["type"] == "solid" and n["lung_rads"] == "4A"
+    assert cur["emphysema"]["whole"]["laa950_pct"] > 5 and cur["emphysema"]["distribution"].startswith("upper")
+    g = compare(prior, cur, interval_days=300)["nodules"][0]
+    assert g["vdt_days"] is not None and g["vdt_days"] < 400
+    p = brock({**n, "zone": "upper"}, {"age": 70, "sex": "female"}, 1, True)["probability"]
+    q = brock({**n, "zone": "upper", "long_axis_mm": 5}, {"age": 50}, 1, False)["probability"]
+    assert p > q
+
+
+def test_lung_rads_rules():
+    from pycanc.analysis import lung_rads
+    base = {"margin": "smooth", "solid_mean_diameter_mm": 0}
+    assert lung_rads({**base, "type": "solid", "mean_diameter_mm": 5}) == "2"
+    assert lung_rads({**base, "type": "solid", "mean_diameter_mm": 7}) == "3"
+    assert lung_rads({**base, "type": "solid", "mean_diameter_mm": 10}) == "4A"
+    assert lung_rads({**base, "type": "solid", "mean_diameter_mm": 16}) == "4B"
+    assert lung_rads({**base, "type": "ground-glass", "mean_diameter_mm": 31}) == "3"
+    assert lung_rads({**base, "type": "part-solid", "mean_diameter_mm": 12, "solid_mean_diameter_mm": 9}) == "4B"
+    assert lung_rads({**base, "type": "solid", "mean_diameter_mm": 10, "margin": "spiculated (estimated)"}) == "4X"
+    assert lung_rads({**base, "type": "calcified", "mean_diameter_mm": 10}) == "1"
